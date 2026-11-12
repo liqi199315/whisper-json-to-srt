@@ -1,11 +1,11 @@
 # Production Launch Checklist (`jsontosrt.com`)
 
-Step-by-step copy-paste runbook for dake (`[人工]` tasks `P0-2` and `P0-3` in `PLAN_90DAY.md`).
+Step-by-step copy-paste runbook. Email Routing, Bing Webmaster Tools, the shared analytics registry, and the report checks were completed on 2026-11-12 (see the live launch record). Remaining `[人工]` work is community launch posts from `LAUNCH_KIT.md` and an optional GitHub visibility change.
 
 - **Repository path:** `/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt`
 - **Canonical domain:** `https://jsontosrt.com` (trademark-clean generic format domain; avoids third-party ASR brand names in the hostname)
 - **Cloudflare Worker name:** `whisper-json-to-srt` (`wrangler.jsonc`)
-- **Support inbox:** `hello@jsontosrt.com` (Cloudflare Email Routing)
+- **Support inbox:** `hello@jsontosrt.com` and `privacy@jsontosrt.com` (Cloudflare Email Routing to `liqi199315@gmail.com`)
 - **Shared analytics key:** `whisperjsontosrt` in `/Users/dake/Projects/aiapp/40_shared/analytics-sites.yaml`
 
 ---
@@ -17,7 +17,12 @@ Step-by-step copy-paste runbook for dake (`[人工]` tasks `P0-2` and `P0-3` in 
 - Google domain ownership verified for the service account and `liqi199315@gmail.com`; Search Console property `sc-domain:jsontosrt.com` registered. Sitemap submission returned HTTP 204 and readback returned HTTP 200 with processing pending.
 - IndexNow accepted 9 URLs with HTTP 202. Googlebot, AdsBot-Google, Bingbot, OAI-SearchBot, ChatGPT-User and PerplexityBot each received HTTP 200. Live HTML contains the measurement ID.
 - Local `verify:all` passed with 29 unit tests and 6 Chromium E2E tests; launch preflight and SEO check returned `ok: true`.
-- Still pending: Email Routing and delivery test, Bing Webmaster Tools registration, shared analytics registry update and reporting checks. Search engine submission does not establish indexing.
+- Cloudflare zone `58c1590cb36fa9e33c7e66176d01f600` (`jsontosrt.com`) is `active`. Email Routing is `enabled: true, status: ready`. `hello@jsontosrt.com` and `privacy@jsontosrt.com` forward to `liqi199315@gmail.com`. MX, SPF, DKIM, and `_dmarc` TXT records are locked.
+- Registered as `whisperjsontosrt` in `../../40_shared/analytics-sites.yaml` (`ga4_property_id: "564001579"`, `G-085WZLBQ8F`, `sc-domain:jsontosrt.com`, `https://jsontosrt.com/`).
+- Bing Webmaster Tools verified (`IsVerified: true` via Cloudflare unproxied `verify.bing.com` CNAME). Sitemap `https://jsontosrt.com/sitemap-index.xml` submitted via `SubmitFeed`.
+- `ga4-report.mjs`, `gsc-report.mjs`, `bing-report.mjs`, and `analytics-registry.test.mjs` all exited `0`.
+- Search engine submission does not establish indexing. Google sitemap processing is still pending.
+- `[人工]` remaining: manual community launch posts from `LAUNCH_KIT.md` (Show HN, Reddit, X, Product Hunt) and toggling GitHub repo visibility if desired (currently private `https://github.com/liqi199315/whisper-json-to-srt`).
 
 ---
 
@@ -46,14 +51,16 @@ Confirm Vitest, `astro build`, `scripts/seo-preflight.mjs` (9 routes + 11 auxili
 
 ---
 
-## Step 3. Create GA4 Web Data Stream (get `G-XXXXXXXXXX` before production build)
+## Step 3. Create GA4 Web Data Stream (get the measurement ID before production build)
+
+**Completed 2026-11-12.** Property `564001579`, stream `16325797678`, measurement ID `G-085WZLBQ8F`. Do not create a second property. The numbered steps below are the historical procedure.
 
 1. Open **Google Analytics Admin** and create property `jsontosrt.com` (reporting time zone and USD currency).
 2. Disable **Google Signals data collection** and **Ads Personalization** under **Data collection and modifications -> Data collection** so telemetry matches `/privacy/`.
 3. Create a **Web Data Stream** for `https://jsontosrt.com` (`Stream name: jsontosrt.com`).
 4. Copy two public identifiers (never commit credentials):
-   - **Measurement ID:** `G-XXXXXXXXXX`
-   - **Property ID:** numeric string under **Property details** (for example `531234567`)
+   - **Measurement ID:** the `G-` ID from the web data stream (live value `G-085WZLBQ8F`)
+   - **Property ID:** numeric string under **Property details** (live value `564001579`)
 5. Grant the shared read-only Google service account **Viewer** access under **Property Access Management**:
    ```text
    build-android@charged-sector-382503.iam.gserviceaccount.com
@@ -73,7 +80,7 @@ Build with production environment variables and deploy via Wrangler:
 cd /Users/dake/Projects/aiapp/30_products/whisper-json-to-srt
 npx wrangler whoami
 PUBLIC_SITE_URL="https://jsontosrt.com" \
-PUBLIC_GA4_MEASUREMENT_ID="G-XXXXXXXXXX" \
+PUBLIC_GA4_MEASUREMENT_ID="G-085WZLBQ8F" \
 npm run cf:deploy
 ```
 
@@ -103,6 +110,8 @@ curl -fsSL https://jsontosrt.com/og-image.png
 
 `/about/`, `/privacy/`, and `/terms/` publish `hello@jsontosrt.com` as the official support and privacy contact.
 
+**Completed 2026-11-12.** Zone `58c1590cb36fa9e33c7e66176d01f600` is `active`. Email Routing is `enabled: true, status: ready`. `hello@jsontosrt.com` and `privacy@jsontosrt.com` forward to `liqi199315@gmail.com`. MX, SPF, DKIM, and `_dmarc` TXT are locked. Do not repeat this step.
+
 1. Open **Cloudflare Dashboard -> Zone `jsontosrt.com` -> Email -> Email Routing**.
 2. Click **Get started** and click **Add records and enable** so Cloudflare adds the required `MX` records and `TXT` SPF record (`v=spf1 include:_spf.mx.cloudflare.net ~all`).
 3. Under **Destination addresses**, add your personal inbox and click the verification link emailed by Cloudflare.
@@ -129,6 +138,8 @@ curl -fsSL https://jsontosrt.com/og-image.png
    ```
 
 ### 6B. Bing Webmaster Tools
+
+**Completed 2026-11-12.** `IsVerified: true` via a Cloudflare unproxied `verify.bing.com` CNAME. Sitemap `https://jsontosrt.com/sitemap-index.xml` was submitted via `SubmitFeed`. Do not submit the sitemap again unless the feed is missing.
 
 1. Open **Bing Webmaster Tools** (using the same account tied to `40_shared/bing-webmaster.key`).
 2. Click **Import from Google Search Console** to import `https://jsontosrt.com/` in one click, or verify via DNS TXT.
@@ -170,15 +181,17 @@ Expect HTTP `200` or `202 Accepted`.
 
 ## Step 7. Register public IDs in `40_shared/analytics-sites.yaml` and test reports
 
-Append this exact 2-space / 4-space indented block under `sites:` in `/Users/dake/Projects/aiapp/40_shared/analytics-sites.yaml` (replace `<NUMERIC_GA4_PROPERTY_ID>` and `G-XXXXXXXXXX` with your real public IDs from Step 3; keep key `whisperjsontosrt` so `package.json` scripts match):
+**Completed 2026-11-12.** Key `whisperjsontosrt` is already present. Do not append a second block. `ga4-report.mjs`, `gsc-report.mjs`, `bing-report.mjs`, and `analytics-registry.test.mjs` all exited `0`.
+
+Registered block in `/Users/dake/Projects/aiapp/40_shared/analytics-sites.yaml`:
 
 ```yaml
   whisperjsontosrt:
     display_name: jsontosrt.com
     repo: 30_products/whisper-json-to-srt
     site_url: https://jsontosrt.com
-    ga4_property_id: "<NUMERIC_GA4_PROPERTY_ID>"
-    ga4_measurement_id: G-XXXXXXXXXX
+    ga4_property_id: "564001579"
+    ga4_measurement_id: G-085WZLBQ8F
     gsc_site: "sc-domain:jsontosrt.com"
     bing_site_url: https://jsontosrt.com/
 ```
@@ -194,4 +207,4 @@ npm run gsc:report
 npm run bing:report
 ```
 
-Once all four commands succeed, mark `P0-2`, `P0-3`, and `P0-4` completed with today's date in `PLAN_90DAY.md` and log the baseline in `NOW.md`.
+The four commands above already exited `0` on 2026-11-12. The baseline is logged in `NOW.md`. Email Routing, Bing Webmaster Tools, the shared registry, and the report checks are complete.

@@ -4,10 +4,10 @@
 
 - **项目路径**：`/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt/`
 - **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；线上首页与 6 种搜索爬虫请求返回 HTTP 200）
-- **联系邮箱规划**：`hello@jsontosrt.com`（Cloudflare Email Routing 转发）
+- **联系邮箱**：`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 已启用 Cloudflare Email Routing，转发至 `liqi199315@gmail.com`（2026-11-12 核验：`enabled: true, status: ready`）
 - **90 天试验窗口**：`2026-11-12` 至 `2027-02-10`（详见 `PLAN_90DAY.md`）
 - **主关键词**：`whisper json to srt converter`
-- **当前流量与转化基线**：`盲`（新站已登记 GA4、Google Search Console 与 IndexNow，真实流量和转化尚未核验；Bing Webmaster Tools 待登记）
+- **当前流量与转化基线**：`盲`（新站已登记 GA4、Google Search Console、Bing Webmaster Tools 与 IndexNow；真实流量和转化尚未核验。站点地图已提交，Google 处理状态仍为待处理，搜索引擎提交不代表已收录）
 
 ## 已就绪资产清单
 
@@ -34,12 +34,15 @@
 - GA4 属性 ID `564001579`，数据流 ID `16325797678`，衡量 ID `G-085WZLBQ8F`。已配置 14 个月保留、关闭站内搜索和表单交互增强衡量，并确认 `subtitle_export` 关键事件。
 - Google Search Console 域名属性 `sc-domain:jsontosrt.com` 已验证，服务账号和 `liqi199315@gmail.com` 均为所有者。站点地图 `https://jsontosrt.com/sitemap-index.xml` 提交返回 204，读取返回 200，Google 处理状态为待处理。
 - IndexNow 于 `2026-11-12` 接受 9 个网址，HTTP 202；接受提交不代表已收录。
-- `[人工]` P0-2 剩余：配置并实测 `hello@jsontosrt.com` Email Routing。
-- `[人工]` P0-3 剩余：配置 Bing Webmaster Tools；按授权范围以外的流程回填共享统计注册表。尚未执行 GA4 / GSC / Bing 报表连通性检查，P0-4 仍待办。
+- `2026-11-12`：Cloudflare Zone `58c1590cb36fa9e33c7e66176d01f600`（`jsontosrt.com`）状态 `active`。Email Routing 为 `enabled: true, status: ready`。`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 转发至 `liqi199315@gmail.com`。MX、SPF、DKIM 与 `_dmarc` TXT 已锁定。
+- `2026-11-12`：已在 `../../40_shared/analytics-sites.yaml` 登记 `whisperjsontosrt`（`ga4_property_id: "564001579"`，衡量 ID `G-085WZLBQ8F`，`sc-domain:jsontosrt.com`，`https://jsontosrt.com/`）。
+- `2026-11-12`：Bing Webmaster Tools 已验证（`IsVerified: true`，经由 Cloudflare 未代理的 `verify.bing.com` CNAME）。站点地图 `https://jsontosrt.com/sitemap-index.xml` 已通过 `SubmitFeed` 提交。
+- `2026-11-12`：`ga4-report.mjs`、`gsc-report.mjs`、`bing-report.mjs` 与 `analytics-registry.test.mjs` 均退出码 `0`。邮箱转发、Bing、共享统计注册与报表连通性检查已完成。
+- `[人工]` 剩余：按 `LAUNCH_KIT.md` 手工发布社区帖（Show HN、Reddit、X、Product Hunt），并按需切换 GitHub 仓库可见性（当前私有：`https://github.com/liqi199315/whisper-json-to-srt`）。
 
 ## 下一步第一动作
 
-- 完成邮箱转发和 Bing 登记，再按授权更新共享统计注册表并验证报表；等待 Google 处理站点地图。
+- `[人工]` 按 `LAUNCH_KIT.md` 发布社区帖（Show HN、Reddit、X、Product Hunt），并按需把 GitHub 仓库从私有改为公开（当前私有：`https://github.com/liqi199315/whisper-json-to-srt`）。等待 Google 处理站点地图。
 
 ## 行动记录
 
@@ -48,3 +51,4 @@
 - `2026-11-12` `[AI]`：完成站点加固 6 大项：通过 Playwright 栅格化生成 1200x630 og-image.png 与 1280x640 github-social-preview.png，BaseLayout.astro 切换 og:image 与 twitter:image；.gitignore 补充 .env 与 .dev.vars 秘钥防护；public/_headers 补充预览域名 noindex、X-Content-Type-Options、X-Frame-Options、HSTS 与 CSP/权限策略；生成双 IndexNow 文件 a8f4c2e91b7d40639e5a12c8d4f07b31.txt；构建 esbuild CLI bin/json-to-srt.mjs 并新增 tests/cli.test.ts（单测增至 29 项）；编写 LAUNCH_KIT.md 与升级 README.md；升级 scripts/seo-preflight.mjs 覆盖 20 项产物校验；verify:all 全流程（Vitest 29/29、astro build、seo:check、Playwright 6/6）全部退出码 0。
 
 - `2026-11-12` `[AI]`：执行生产上线，`npm run verify:all` 通过（29 项单测、6 项 Chromium E2E），上线预检和 SEO 检查均 `ok: true`；完成 GA4 配置、GSC 域名验证与站点地图提交、IndexNow 提交，并核验 6 种爬虫 HTTP 200、主域名 GA4 ID 和 www 301。
+- `2026-11-12` `[AI]`：核验 Email Routing、Bing Webmaster Tools 与共享统计注册。Zone `58c1590cb36fa9e33c7e66176d01f600` 为 `active`，Email Routing `enabled: true, status: ready`，`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 转发至 `liqi199315@gmail.com`，MX、SPF、DKIM 与 `_dmarc` TXT 已锁定。`whisperjsontosrt` 已登记（`ga4_property_id: "564001579"`，`G-085WZLBQ8F`，`sc-domain:jsontosrt.com`，`https://jsontosrt.com/`）。Bing `IsVerified: true`（Cloudflare 未代理 `verify.bing.com` CNAME），站点地图已 `SubmitFeed`。`ga4-report.mjs`、`gsc-report.mjs`、`bing-report.mjs` 与 `analytics-registry.test.mjs` 均退出码 `0`。
