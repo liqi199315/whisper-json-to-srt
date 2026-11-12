@@ -1,0 +1,181 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const siteOrigin = (
+	Astro.site?.toString() ??
+	import.meta.env.PUBLIC_SITE_URL ??
+	'https://jsontosrt.com'
+).replace(/\/$/, '');
+const canonicalUrl = `${siteOrigin}/privacy/`;
+
+const jsonLdGraph = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'Organization',
+			'@id': `${siteOrigin}/#organization`,
+			name: 'JSON to SRT',
+			url: `${siteOrigin}/`,
+			email: 'hello@jsontosrt.com',
+		},
+		{
+			'@type': 'BreadcrumbList',
+			'@id': `${canonicalUrl}#breadcrumb`,
+			itemListElement: [
+				{
+					'@type': 'ListItem',
+					position: 1,
+					name: 'JSON to SRT Converter',
+					item: `${siteOrigin}/`,
+				},
+				{
+					'@type': 'ListItem',
+					position: 2,
+					name: 'Privacy Policy',
+					item: canonicalUrl,
+				},
+			],
+		},
+	],
+};
+
+const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
+---
+
+<BaseLayout
+	title="Privacy Policy & Zero-Upload Guarantee | JSON to SRT"
+	description="JSON to SRT processes transcript files 100% locally in browser RAM. Read our zero-upload guarantee, anonymized GA4 telemetry scope, cookie controls, and GDPR/CCPA summary."
+	canonicalPath="/privacy/"
+>
+	<article class="max-w-4xl mx-auto space-y-8">
+		<script is:inline type="application/ld+json" set:html={jsonLdSerialized} />
+
+		<header class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<div class="inline-flex flex-wrap items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-900">
+				<span>Effective Date: November 12, 2026</span>
+				<span class="text-emerald-400">/</span>
+				<span>Zero Transcript Upload</span>
+			</div>
+			<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950">
+				Privacy Policy and Zero-Upload Data Guarantee
+			</h1>
+			<p class="text-sm sm:text-base text-slate-600 leading-relaxed">
+				This Privacy Policy explains what data JSON to SRT (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code>) never touches, what minimal aggregate telemetry is collected in production, and how you can exercise your privacy and opt-out rights.
+			</p>
+		</header>
+
+		<section class="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				1. Explicit Zero-Upload Guarantee for Audio and JSON Files
+			</h2>
+			<p class="text-sm sm:text-base text-slate-800 leading-relaxed">
+				<strong>Your transcript JSON files, pasted text, speaker labels, filenames, and exported subtitles never leave your browser RAM.</strong>
+			</p>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-800 leading-relaxed">
+				<li>
+					When you select or drop a <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">.json</code> file on any <a href="/" class="text-sky-800 font-medium underline underline-offset-4">JSON to SRT converter route</a>, your browser reads the file locally in memory using <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">File.text()</code>.
+				</li>
+				<li>
+					No backend upload API, cloud storage bucket, database, or server-side transcription worker exists behind <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">jsontosrt.com</code>.
+				</li>
+				<li>
+					Converted <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">.srt</code>, <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">.vtt</code>, <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">.txt</code>, and <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">.csv</code> outputs are generated inside your tab via <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">Blob</code> URLs and cleared from volatile memory as soon as you close or reload the tab.
+				</li>
+				<li>
+					You can verify this guarantee directly in your browser Developer Tools (<code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-emerald-200">Network</code> panel) or disconnect Wi-Fi after loading the page and convert multi-megabyte files offline.
+				</li>
+			</ul>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				2. Anonymized GA4 Telemetry (<code class="font-mono text-base">page_view</code> and <code class="font-mono text-base">subtitle_export</code>)
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				On the live production domain, we use Google Analytics 4 (GA4) with IP anonymization enabled (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">anonymize_ip: true</code>) and Google Signals advertising personalization disabled to understand aggregate tool usage and search performance.
+			</p>
+			<div class="overflow-x-auto rounded-xl border border-slate-200">
+				<table class="w-full text-left border-collapse text-xs sm:text-sm">
+					<thead>
+						<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-xs">
+							<th scope="col" class="py-2.5 px-3 font-semibold">Event Name</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Parameters Recorded</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Explicitly Excluded Data</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						<tr>
+							<th scope="row" class="py-3 px-3 font-mono text-xs text-slate-900">page_view</th>
+							<td class="py-3 px-3 text-slate-700">
+								Page path (for example <code class="font-mono text-xs">/whisperx-diarized-json-to-srt/</code>), HTTP referrer domain, coarse device viewport category, and browser language.
+							</td>
+							<td class="py-3 px-3 text-slate-700">
+								No user account IDs, email addresses, or cross-site ad profiles.
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-mono text-xs text-slate-900">subtitle_export</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">export_action</code> (<code class="font-mono text-xs">copy</code> or <code class="font-mono text-xs">download</code>) and <code class="font-mono text-xs">output_format</code> (<code class="font-mono text-xs">srt</code>, <code class="font-mono text-xs">vtt</code>, <code class="font-mono text-xs">txt</code>, or <code class="font-mono text-xs">csv</code>).
+							</td>
+							<td class="py-3 px-3 text-slate-700">
+								Never includes transcript text, cue dialogue, speaker names, uploaded filenames, or file byte contents.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+				During local development and automated Playwright testing on <code class="font-mono text-xs">127.0.0.1</code> or <code class="font-mono text-xs">localhost</code>, external Google tag scripts are suppressed so zero external network requests occur.
+			</p>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				3. Static Hosting, Edge Security Logs, and Email Contact
+			</h2>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+				<li>
+					<strong>Cloudflare static delivery:</strong> Static HTML, CSS, and JavaScript assets are served globally over HTTPS through Cloudflare Workers Static Assets. Cloudflare processes transient connection metadata (request IP address, TLS version, HTTP user-agent, and requested URL path) strictly for routing, caching, and automated DDoS protection.
+				</li>
+				<li>
+					<strong>Direct email inquiries:</strong> If you voluntarily send an email to <a href="mailto:hello@jsontosrt.com" class="font-mono text-sky-700 hover:underline break-words">hello@jsontosrt.com</a>, we receive your sender address and message body via Cloudflare Email Routing solely to reply to your support request. We never add support senders to marketing lists or sell contact information.
+				</li>
+			</ul>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				4. Cookies and Opt-Out Rights
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				The core subtitle converter sets zero functional or authentication cookies and does not use <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">localStorage</code> or <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">IndexedDB</code> to persist transcripts. When GA4 loads on the production site, Google sets first-party measurement cookies (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga</code> and <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga_*</code>) to distinguish aggregate sessions.
+			</p>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				You can block or opt out of GA4 measurement at any time with zero degradation to converter functionality:
+			</p>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+				<li>Use privacy-focused browsers (such as Brave, Firefox Enhanced Tracking Protection, or Safari Intelligent Tracking Prevention) or content blockers (such as uBlock Origin), which block <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">googletagmanager.com</code> scripts while keeping all local parsing intact.</li>
+				<li>Install the official <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Google Analytics Opt-out Browser Add-on</a>.</li>
+				<li>Clear cookies for <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code> in your browser site settings at any time.</li>
+			</ul>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				5. GDPR, UK GDPR, and CCPA / CPRA Summary
+			</h2>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+				<li>
+					<strong>European Economic Area and UK visitors (GDPR / UK GDPR):</strong> Because transcript conversion happens strictly on your own device, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code> never acts as a processor or controller of personal data contained inside your audio transcripts. For email correspondence you initiate, we process your message to respond to your inquiry and delete support threads upon request.
+				</li>
+				<li>
+					<strong>California residents (CCPA / CPRA):</strong> We do not sell or share personal information as defined under the California Consumer Privacy Act, and we do not engage in cross-context behavioral advertising.
+				</li>
+				<li>
+					<strong>Exercising your rights:</strong> To request access to or deletion of any email correspondence sent to us, or to ask a privacy question, contact <a href="mailto:hello@jsontosrt.com" class="font-mono font-semibold text-sky-800 underline underline-offset-4 break-words">hello@jsontosrt.com</a>. Also review our <a href="/about/" class="text-sky-800 font-medium underline underline-offset-4">About page</a> and <a href="/terms/" class="text-sky-800 font-medium underline underline-offset-4">Terms of Use</a>.
+				</li>
+			</ul>
+		</section>
+	</article>
+</BaseLayout>

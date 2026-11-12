@@ -1,0 +1,58 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { WORKFLOW_LINK_CARDS } from '../lib/route-presets';
+---
+
+<BaseLayout
+	title="404 Page Not Found | Whisper JSON to SRT Converter"
+	description="The requested Whisper subtitle preset route does not exist. Open one of the six local browser-based JSON to SRT and WebVTT converters below."
+	canonicalPath="/404/"
+	noindex={true}
+>
+	<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-10 shadow-xs max-w-4xl mx-auto space-y-6">
+		<div class="space-y-3">
+			<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">HTTP 404</p>
+			<h1 class="text-2xl sm:text-3xl font-bold text-slate-950">
+				Subtitle preset page not found
+			</h1>
+			<p class="text-sm sm:text-base text-slate-600 leading-relaxed">
+				That URL does not match an active converter route. Open the main JSON to SRT workbench or pick a specialized ASR subtitle workflow below to convert your transcript locally in your browser.
+			</p>
+			<div class="pt-1">
+				<a
+					href="/"
+					class="min-h-11 inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
+				>
+					Open Main JSON to SRT Converter
+				</a>
+			</div>
+		</div>
+
+		<div class="space-y-3 pt-2 border-t border-slate-100">
+			<h2 class="text-sm font-bold uppercase tracking-wider text-slate-600">
+				Available Local Subtitle Workflows
+			</h2>
+			<ul class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+				{
+					WORKFLOW_LINK_CARDS.map((card) => (
+						<li>
+							<a
+								href={card.path}
+								class="min-h-24 flex flex-col justify-between gap-2 rounded-xl border border-slate-200 p-4 hover:border-sky-400 hover:bg-sky-50/40 transition-colors"
+							>
+								<div class="space-y-1">
+									<span class="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+										{card.badge}
+									</span>
+									<span class="block text-sm font-bold text-slate-950">{card.anchorText}</span>
+									<span class="block text-xs text-slate-600 leading-relaxed">{card.summary}</span>
+								</div>
+								<span class="font-mono text-[11px] text-sky-700">{card.presetConfig}</span>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</div>
+	</section>
+</BaseLayout>

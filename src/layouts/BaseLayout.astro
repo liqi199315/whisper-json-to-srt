@@ -1,0 +1,644 @@
+---
+import '../styles/global.css';
+import { ROUTE_PRESETS } from '../lib/route-presets';
+import type { RouteFaqItem, ToolRoutePreset } from '../lib/types';
+
+interface Props {
+	preset?: ToolRoutePreset;
+	title?: string;
+	description?: string;
+	canonicalPath?: string;
+	faqs?: RouteFaqItem[];
+	noindex?: boolean;
+}
+
+const {
+	preset,
+	title,
+	description,
+	canonicalPath,
+	faqs,
+	noindex = false,
+} = Astro.props;
+
+const siteOrigin = (Astro.site?.toString() ?? 'https://jsontosrt.com').replace(/\/$/, '');
+const rawPath = preset?.path ?? canonicalPath ?? Astro.url.pathname;
+const normalizedPath = rawPath === '/' ? '/' : `/${rawPath.replace(/^\/+|\/+$/g, '')}/`;
+const canonicalUrl = new URL(normalizedPath, `${siteOrigin}/`).toString();
+const ogImageUrl = `${siteOrigin}/og-image.png`;
+
+const pageTitle = preset?.seoTitle ?? title ?? 'JSON to SRT | Local Whisper Subtitle Converter';
+const pageDescription =
+	preset?.metaDescription ??
+	description ??
+	'Convert OpenAI Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON transcripts into SRT, VTT, TXT, or CSV files locally in your browser.';
+const resolvedFaqs = preset?.faqs ?? faqs ?? [];
+const currentCrumbName =
+	preset?.navLabel ?? (title ? title.split('|')[0].trim() : pageTitle);
+
+const organizationNode = {
+	'@type': 'Organization',
+	'@id': `${siteOrigin}/#organization`,
+	name: 'JSON to SRT',
+	url: siteOrigin,
+	logo: `${siteOrigin}/favicon.svg`,
+};
+
+const breadcrumbItems =
+	normalizedPath === '/'
+		? [
+				{
+					'@type': 'ListItem',
+					position: 1,
+					name: 'Home',
+					item: `${siteOrigin}/`,
+				},
+		  ]
+		: [
+				{
+					'@type': 'ListItem',
+					position: 1,
+					name: 'Home',
+					item: `${siteOrigin}/`,
+				},
+				{
+					'@type': 'ListItem',
+					position: 2,
+					name: currentCrumbName,
+					item: canonicalUrl,
+				},
+		  ];
+
+const breadcrumbListNode = {
+	'@type': 'BreadcrumbList',
+	'@id': `${canonicalUrl}#breadcrumb`,
+	itemListElement: breadcrumbItems,
+};
+
+const webApplicationNode = {
+	'@type': 'WebApplication',
+	'@id': `${canonicalUrl}#webapp`,
+	name: preset?.h1 ?? pageTitle,
+	url: canonicalUrl,
+	image: ogImageUrl,
+	description: pageDescription,
+	applicationCategory: 'MultimediaApplication',
+	operatingSystem: 'Any modern desktop or mobile browser',
+	isAccessibleForFree: true,
+	publisher: {
+		'@id': `${siteOrigin}/#organization`,
+	},
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD',
+	},
+	featureList: [
+		'Auto-detects OpenAI Whisper verbose_json, WhisperX diarized, whisper.cpp, Deepgram Nova, and AssemblyAI JSON formats',
+		'Exports SubRip (.srt), WebVTT (.vtt), plain text (.txt), and CSV (.csv) subtitle files',
+		'Configurable max characters per line (8 to 84) and max lines per cue (1 or 2)',
+		'Millisecond timestamp offset shift and optional [SPEAKER_XX] diarization labels',
+		'100% browser-local File.text() processing with zero server upload and support for >5 MB JSON files',
+	],
+};
+
+const faqPageNode =
+	resolvedFaqs.length > 0
+		? {
+				'@type': 'FAQPage',
+				'@id': `${canonicalUrl}#faq`,
+				mainEntity: resolvedFaqs.map((item) => ({
+					'@type': 'Question',
+					name: item.question,
+					acceptedAnswer: {
+						'@type': 'Answer',
+						text: item.answer,
+					},
+				})),
+		  }
+		: null;
+
+const graphNodes: Record<string, unknown>[] = [
+	organizationNode,
+	breadcrumbListNode,
+	webApplicationNode,
+];
+if (faqPageNode) {
+	graphNodes.push(faqPageNode);
+}
+
+const jsonLdGraph = {
+	'@context': 'https://schema.org',
+	'@graph': graphNodes,
+};
+
+const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
+const ga4MeasurementId = (import.meta.env.PUBLIC_GA4_MEASUREMENT_ID ?? '').trim();
+const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim();
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{pageTitle}</title>
+		<meta name="description" content={pageDescription} />
+		<link rel="canonical" href={canonicalUrl} />
+		<meta
+			name="robots"
+			content={noindex ? 'noindex, follow' : 'index, follow, max-snippet:-1, max-image-preview:large'}
+		/>
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<meta name="theme-color" content="#0f172a" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="JSON to SRT" />
+		<meta property="og:title" content={pageTitle} />
+		<meta property="og:description" content={pageDescription} />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:image" content={ogImageUrl} />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={pageTitle} />
+		<meta name="twitter:description" content={pageDescription} />
+		<meta name="twitter:image" content={ogImageUrl} />
+
+		<script is:inline type="application/ld+json" set:html={jsonLdSerialized} />
+		<script is:inline define:vars={{ ga4MeasurementId, clarityProjectId }}>
+			(function () {
+				if (window.__jsonToSrtAnalyticsBootstrap) return;
+				window.__jsonToSrtAnalyticsBootstrap = true;
+				window.dataLayer = window.dataLayer || [];
+
+				function analyticsPageLocation() {
+					const safe = new URL(window.location.origin + window.location.pathname);
+					const original = new URL(window.location.href);
+					const allowedKey = /^(?:utm_[a-z0-9_]{1,32}|gclid|msclkid)$/i;
+					const clickIdKey = /^(?:gclid|msclkid)$/i;
+					const keys = Array.from(new Set(Array.from(original.searchParams.keys())));
+					for (let i = 0; i < keys.length; i += 1) {
+						const key = keys[i];
+						if (!allowedKey.test(key)) continue;
+						const values = original.searchParams.getAll(key);
+						if (values.length !== 1) continue;
+						const value = values[0];
+						const validShape = clickIdKey.test(key)
+							? /^[A-Za-z0-9_.~-]{1,256}$/
+							: /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}]{1,200}$/u;
+						const rejected = /(?:@|:\/\/|\\|%[0-9a-f]{2}|token|secret|password)/i.test(value);
+						if (validShape.test(value) && !rejected) {
+							safe.searchParams.set(key.toLowerCase(), value);
+						}
+					}
+					return safe.href;
+				}
+
+				function analyticsPageReferrer() {
+					try {
+						if (!document.referrer) return '';
+						const ref = new URL(document.referrer);
+						return ref.protocol === 'https:' || ref.protocol === 'http:' ? ref.origin + '/' : '';
+					} catch {
+						return '';
+					}
+				}
+
+				function queueGtag() {
+					window.dataLayer.push(arguments);
+				}
+
+				function gtag() {
+					if (arguments[0] === 'event') {
+						const merged = Object.assign({}, arguments[2] || {}, {
+							page_location: analyticsPageLocation(),
+							page_referrer: analyticsPageReferrer(),
+						});
+						return queueGtag('event', arguments[1], merged);
+					}
+					return queueGtag.apply(null, arguments);
+				}
+
+				window.gtag = gtag;
+
+				const configuredMeasurementId =
+					typeof ga4MeasurementId === 'string' && ga4MeasurementId.length > 0
+						? ga4MeasurementId
+						: 'G-PENDING000';
+				const safePage = {
+					page_location: analyticsPageLocation(),
+					page_referrer: analyticsPageReferrer(),
+				};
+
+				gtag('js', new Date());
+				gtag('set', safePage);
+				gtag('config', configuredMeasurementId, {
+					anonymize_ip: true,
+					page_location: safePage.page_location,
+					page_referrer: safePage.page_referrer,
+				});
+
+				let lastIdentity = window.location.pathname + window.location.search;
+				let previousVirtualPage = window.location.origin + window.location.pathname;
+				function trackNavigation() {
+					const identity = window.location.pathname + window.location.search;
+					if (identity === lastIdentity) return;
+					const referrer = previousVirtualPage;
+					lastIdentity = identity;
+					previousVirtualPage = window.location.origin + window.location.pathname;
+					queueGtag('event', 'page_view', {
+						page_location: analyticsPageLocation(),
+						page_referrer: referrer,
+					});
+				}
+
+				if (!window.__jsonToSrtNavigationInit) {
+					window.__jsonToSrtNavigationInit = true;
+					['pushState', 'replaceState'].forEach(function (method) {
+						const original = window.history[method];
+						window.history[method] = function () {
+							const result = original.apply(this, arguments);
+							trackNavigation();
+							return result;
+						};
+					});
+					window.addEventListener('popstate', trackNavigation);
+				}
+
+				const host = window.location.hostname;
+				const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+				const isLiveGa4Id =
+					configuredMeasurementId.indexOf('G-') === 0 &&
+					configuredMeasurementId !== 'G-PENDING000' &&
+					!/^G-X+$/i.test(configuredMeasurementId);
+
+				if (!isLocalHost && isLiveGa4Id) {
+					const gtagScript = document.createElement('script');
+					gtagScript.async = true;
+					gtagScript.src =
+						'https://www.googletagmanager.com/gtag/js?id=' +
+						encodeURIComponent(configuredMeasurementId);
+					document.head.appendChild(gtagScript);
+
+					if (
+						typeof clarityProjectId === 'string' &&
+						/^[a-z0-9]{6,24}$/i.test(clarityProjectId) &&
+						clarityProjectId.toUpperCase() !== 'PENDING'
+					) {
+						window.clarity =
+							window.clarity ||
+							function () {
+								(window.clarity.q = window.clarity.q || []).push(arguments);
+							};
+						const clarityScript = document.createElement('script');
+						clarityScript.async = true;
+						clarityScript.src =
+							'https://www.clarity.ms/tag/' + encodeURIComponent(clarityProjectId);
+						document.head.appendChild(clarityScript);
+					}
+				}
+			})();
+		</script>
+	</head>
+	<body class="bg-slate-50 text-slate-900 flex flex-col min-h-screen">
+		<header class="border-b border-slate-200/90 bg-white/95 backdrop-blur-md sticky top-0 z-30">
+			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 space-y-2 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+				<div class="flex items-center justify-between gap-3">
+					<div class="flex flex-wrap items-center gap-2.5">
+						<a
+							href="/"
+							class="inline-flex items-center gap-2.5 text-slate-950 font-bold tracking-tight text-base hover:text-sky-700 transition-colors"
+						>
+							<span class="inline-flex h-7 w-8 items-center justify-center rounded-lg bg-slate-900 text-sky-400 font-mono text-xs font-bold shadow-2xs">
+								SRT
+							</span>
+							<span>JSON to SRT</span>
+						</a>
+						<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] sm:text-xs font-medium text-emerald-800 border border-emerald-200">
+							<span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>
+							<span>Zero Upload / Local Browser Engine</span>
+						</span>
+					</div>
+
+					<details class="relative md:hidden">
+						<summary class="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 cursor-pointer select-none">
+							<span>Presets</span>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="h-4 w-4 text-slate-500"
+								aria-hidden="true"
+							>
+								<path
+									fill-rule="evenodd"
+									d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						</summary>
+						<nav
+							aria-label="Mobile subtitle converter presets"
+							class="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-2 shadow-lg z-40 space-y-1"
+						>
+							{
+								ROUTE_PRESETS.map((route) => {
+									const isActive = route.path === normalizedPath;
+									return (
+										<a
+											href={route.path}
+											aria-current={isActive ? 'page' : undefined}
+											class:list={[
+												'flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+												isActive
+													? 'bg-slate-900 text-white'
+													: 'text-slate-700 hover:bg-slate-100 hover:text-slate-950',
+											]}
+										>
+											<span>{route.navLabel}</span>
+											<span
+												class:list={[
+													'font-mono text-[10px] uppercase',
+													isActive ? 'text-sky-300' : 'text-slate-400',
+												]}
+											>
+												.{route.defaultOptions.format}
+											</span>
+										</a>
+									);
+								})
+							}
+							<div class="border-t border-slate-100 pt-1 mt-1 flex items-center justify-between px-2 py-1 text-[11px] text-slate-500">
+								<a href="/about/" class="hover:text-slate-900">About</a>
+								<a href="/privacy/" class="hover:text-slate-900">Privacy</a>
+								<a href="/terms/" class="hover:text-slate-900">Terms</a>
+							</div>
+						</nav>
+					</details>
+				</div>
+
+				<nav aria-label="Subtitle converter presets" class="hidden md:flex flex-wrap items-center gap-1">
+					{
+						ROUTE_PRESETS.map((route) => {
+							const isActive = route.path === normalizedPath;
+							return (
+								<a
+									href={route.path}
+									aria-current={isActive ? 'page' : undefined}
+									class:list={[
+										'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+										isActive
+											? 'bg-slate-900 text-white shadow-2xs'
+											: 'text-slate-600 hover:text-slate-950 hover:bg-slate-100',
+									]}
+								>
+									{route.navLabel}
+								</a>
+							);
+						})
+					}
+				</nav>
+			</div>
+		</header>
+
+		<main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-10">
+			{
+				preset && (
+					<section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+						<div class="lg:col-span-7 space-y-3">
+							<div class="inline-flex flex-wrap items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-medium text-sky-900">
+								<span>Zero server upload</span>
+								<span class="text-sky-400">/</span>
+								<span>No 2 MB file cap</span>
+								<span class="text-sky-400">/</span>
+								<span>Instant Blob download</span>
+							</div>
+							<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950">
+								{preset.h1}
+							</h1>
+							<p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
+								{preset.heroSummary}
+							</p>
+						</div>
+
+						<aside
+							aria-label="Quick technical specification"
+							class="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3"
+						>
+							<div class="flex items-center justify-between border-b border-slate-100 pb-2">
+								<h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+									Technical Summary
+								</h2>
+								<span class="font-mono text-xs text-slate-500">{preset.path}</span>
+							</div>
+							<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+								<div>
+									<dt class="font-semibold text-slate-900">Supported ASR JSON</dt>
+									<dd class="text-slate-600 mt-0.5">
+										OpenAI verbose_json, WhisperX, whisper.cpp, Deepgram, AssemblyAI
+									</dd>
+								</div>
+								<div>
+									<dt class="font-semibold text-slate-900">Active Preset Output</dt>
+									<dd class="text-slate-600 mt-0.5 font-mono">
+										.{preset.defaultOptions.format} ({preset.defaultOptions.maxCharsPerLine} chars x{' '}
+										{preset.defaultOptions.maxLinesPerCue}{' '}
+										{preset.defaultOptions.maxLinesPerCue === 1 ? 'line' : 'lines'}
+										{preset.defaultOptions.includeSpeakerPrefix ? ', speakers on' : ''})
+									</dd>
+								</div>
+								<div>
+									<dt class="font-semibold text-slate-900">Execution &amp; Privacy</dt>
+									<dd class="text-slate-600 mt-0.5">
+										Client-side File.text() in local RAM; zero external API requests
+									</dd>
+								</div>
+								<div>
+									<dt class="font-semibold text-slate-900">File Size Ceiling</dt>
+									<dd class="text-slate-600 mt-0.5">
+										Handles &gt;5 MB multi-hour word-timestamp JSON without paywalls
+									</dd>
+								</div>
+							</dl>
+						</aside>
+					</section>
+				)
+			}
+
+			<slot />
+
+			{
+				preset && (
+					<section
+						aria-labelledby="comparison-heading"
+						class="rounded-xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+					>
+						<div class="space-y-1">
+							<h2 id="comparison-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+								Why browser-local parsing beats 2 MB paywalled cloud converters
+							</h2>
+							<p class="text-sm text-slate-600">
+								An hour-long Whisper transcript with word-level timestamps routinely reaches 3 MB to 8 MB of JSON. Cloud upload tools meter that file size behind subscriptions while exposing private audio transcripts to remote storage.
+							</p>
+						</div>
+
+						<div class="overflow-x-auto">
+							<table class="w-full text-left border-collapse text-sm">
+								<thead>
+									<tr class="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+										<th scope="col" class="py-3 pr-4 font-semibold">Capability</th>
+										<th
+											scope="col"
+											class="py-3 px-4 font-semibold text-emerald-800 bg-emerald-50/60 rounded-tl-lg"
+										>
+											JSON to SRT Local Engine
+										</th>
+										<th scope="col" class="py-3 pl-4 font-semibold text-slate-600">
+											Paywalled Cloud Converters
+										</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-slate-100">
+									<tr>
+										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">JSON file size limit</th>
+										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
+											No artificial cap; parses &gt;5 MB multi-hour transcripts in milliseconds
+										</td>
+										<td class="py-3 pl-4 text-slate-600">
+											Blocks uploads over 1 MB or 2 MB without a paid plan
+										</td>
+									</tr>
+									<tr>
+										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">
+											Data privacy &amp; NDA compliance
+										</th>
+										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
+											Zero bytes leave your browser tab; safe for client, legal, and medical audio
+										</td>
+										<td class="py-3 pl-4 text-slate-600">
+											Uploads raw transcript JSON to remote servers and third-party buckets
+										</td>
+									</tr>
+									<tr>
+										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">ASR dialect coverage</th>
+										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
+											Auto-detects OpenAI verbose_json, WhisperX, whisper.cpp, Deepgram, AssemblyAI
+										</td>
+										<td class="py-3 pl-4 text-slate-600">
+											Breaks when segments[] is missing or timestamps use integer milliseconds
+										</td>
+									</tr>
+									<tr>
+										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">
+											Cue line-width wrapping
+										</th>
+										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
+											Live 8 to 84 char wrapping, 1 or 2 lines per cue, word-level timing split
+										</td>
+										<td class="py-3 pl-4 text-slate-600">
+											Exports raw 100-character decoder blocks that overflow video frames
+										</td>
+									</tr>
+									<tr>
+										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">
+											Speaker labels &amp; sync offset
+										</th>
+										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
+											Instant [SPEAKER_XX] prefixes, turn-boundary breaks, and millisecond offset
+										</td>
+										<td class="py-3 pl-4 text-slate-600">
+											Drops pyannote speaker fields or requires manual desktop retiming
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				)
+			}
+		</main>
+
+		<footer class="border-t border-slate-200 bg-white mt-12">
+			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-12 gap-8 text-xs text-slate-600">
+				<div class="md:col-span-5 space-y-2.5">
+					<div class="flex items-center gap-2">
+						<span class="inline-flex h-6 w-7 items-center justify-center rounded-md bg-slate-900 text-sky-400 font-mono text-[11px] font-bold">
+							SRT
+						</span>
+						<p class="font-bold text-sm text-slate-950">JSON to SRT</p>
+					</div>
+					<p class="leading-relaxed">
+						Browser-local subtitle converter for OpenAI Whisper, WhisperX, whisper.cpp, Deepgram Nova, and AssemblyAI JSON files. Zero uploads, zero accounts, and no file size caps.
+					</p>
+					<p class="text-slate-500">
+						Independent utility; not affiliated with OpenAI, Deepgram, or AssemblyAI.
+					</p>
+				</div>
+
+				<div class="md:col-span-4 space-y-2.5">
+					<p class="font-semibold uppercase tracking-wider text-[11px] text-slate-900">
+						Converter Presets
+					</p>
+					<ul class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-1.5">
+						{
+							ROUTE_PRESETS.map((route) => (
+								<li>
+									<a
+										href={route.path}
+										class="hover:text-slate-950 underline-offset-4 hover:underline"
+									>
+										{route.navLabel}
+									</a>
+								</li>
+							))
+						}
+					</ul>
+				</div>
+
+				<div class="md:col-span-3 space-y-2.5">
+					<p class="font-semibold uppercase tracking-wider text-[11px] text-slate-900">
+						Trust &amp; Indexing
+					</p>
+					<ul class="space-y-1.5">
+						<li>
+							<a href="/about/" class="hover:text-slate-950 underline-offset-4 hover:underline">
+								About
+							</a>
+						</li>
+						<li>
+							<a href="/privacy/" class="hover:text-slate-950 underline-offset-4 hover:underline">
+								Privacy Policy
+							</a>
+						</li>
+						<li>
+							<a href="/terms/" class="hover:text-slate-950 underline-offset-4 hover:underline">
+								Terms of Use
+							</a>
+						</li>
+						<li>
+							<a
+								href="/llms.txt"
+								class="font-mono hover:text-slate-950 underline-offset-4 hover:underline"
+							>
+								llms.txt
+							</a>
+						</li>
+						<li>
+							<a
+								href="/sitemap-index.xml"
+								class="font-mono hover:text-slate-950 underline-offset-4 hover:underline"
+							>
+								sitemap-index.xml
+							</a>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</footer>
+	</body>
+</html>

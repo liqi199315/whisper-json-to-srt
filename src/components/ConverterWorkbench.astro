@@ -1,0 +1,1163 @@
+---
+import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
+import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
+import type { CueFormatOptions, DialectId, OutputFormat, SubtitleCue, ToolRoutePreset } from '../lib/types';
+
+interface Props {
+	preset: ToolRoutePreset;
+}
+
+interface QuickModePill {
+	id: string;
+	label: string;
+	detail: string;
+	format: OutputFormat;
+	maxCharsPerLine: number;
+	maxLinesPerCue: 1 | 2;
+	includeSpeakerPrefix: boolean;
+	maxCueDurationSec: number;
+	pauseSplitGapSec: number;
+}
+
+interface CueHealthSummary {
+	totalCues: number;
+	fittingCues: number;
+	fitPercent: number;
+	avgCps: number;
+	fastCueCount: number;
+	totalWords: number;
+	durationSec: number;
+}
+
+const { preset } = Astro.props;
+
+const DIALECT_IDS: DialectId[] = [
+	'openai-verbose-json',
+	'whisperx-diarized',
+	'whisper-cpp',
+	'deepgram-nova',
+	'assemblyai-utterances',
+];
+
+const FORMAT_OPTIONS: Array<{ id: OutputFormat; label: string }> = [
+	{ id: 'srt', label: 'SRT (.srt)' },
+	{ id: 'vtt', label: 'WebVTT (.vtt)' },
+	{ id: 'txt', label: 'Plain Text (.txt)' },
+	{ id: 'csv', label: 'CSV Table (.csv)' },
+];
+
+const QUICK_MODE_PILLS: QuickModePill[] = [
+	{
+		id: 'broadcast',
+		label: 'Broadcast 42c x 2',
+		detail: '16:9 NLE & YouTube',
+		format: 'srt',
+		maxCharsPerLine: 42,
+		maxLinesPerCue: 2,
+		includeSpeakerPrefix: false,
+		maxCueDurationSec: 6,
+		pauseSplitGapSec: 0.6,
+	},
+	{
+		id: 'shorts',
+		label: 'TikTok/Shorts 16c x 1',
+		detail: '9:16 vertical safe',
+		format: 'srt',
+		maxCharsPerLine: 16,
+		maxLinesPerCue: 1,
+		includeSpeakerPrefix: false,
+		maxCueDurationSec: 2.5,
+		pauseSplitGapSec: 0.35,
+	},
+	{
+		id: 'podcast',
+		label: 'Podcast Speaker Tags',
+		detail: '[SPEAKER] turns',
+		format: 'srt',
+		maxCharsPerLine: 42,
+		maxLinesPerCue: 2,
+		includeSpeakerPrefix: true,
+		maxCueDurationSec: 6,
+		pauseSplitGapSec: 0.6,
+	},
+	{
+		id: 'webvtt',
+		label: 'WebVTT Player',
+		detail: 'HTML5 <track>',
+		format: 'vtt',
+		maxCharsPerLine: 42,
+		maxLinesPerCue: 2,
+		includeSpeakerPrefix: false,
+		maxCueDurationSec: 6,
+		pauseSplitGapSec: 0.6,
+	},
+];
+
+const CJK_COUNT_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g;
+
+function formatByteSize(bytes: number): string {
+	if (bytes >= 1_000_000) {
+		return `${(bytes / 1_000_000).toFixed(2)} MB`;
+	}
+	if (bytes >= 1_000) {
+		return `${(bytes / 1_000).toFixed(1)} KB`;
+	}
+	return `${bytes} B`;
+}
+
+function formatDuration(sec: number): string {
+	const safe = Math.max(0, Number.isFinite(sec) ? sec : 0);
+	const mins = Math.floor(safe / 60);
+	const rem = safe - mins * 60;
+	const mm = String(mins).padStart(2, '0');
+	const ss = rem.toFixed(1).padStart(4, '0');
+	return `${mm}:${ss} (${safe.toFixed(1)}s)`;
+}
+
+function countLineWords(line: string, stripSpeakerTag: boolean): number {
+	const cleaned = stripSpeakerTag ? line.replace(/^\[[^\]]+\]\s*/, '') : line;
+	const cjkMatches = cleaned.match(CJK_COUNT_RE);
+	const nonCjk = cleaned.replace(CJK_COUNT_RE, ' ').trim();
+	const latinWords = nonCjk ? nonCjk.split(/\s+/).length : 0;
+	return (cjkMatches ? cjkMatches.length : 0) + latinWords;
+}
+
+function computeCueHealth(
+	cues: SubtitleCue[],
+	maxCharsPerLine: number,
+	durationSec: number,
+): CueHealthSummary {
+	let fittingCues = 0;
+	let fastCueCount = 0;
+	let totalChars = 0;
+	let totalActiveSpan = 0;
+	let totalWords = 0;
+
+	for (const cue of cues) {
+		const maxLen = cue.lines.reduce((acc, line) => Math.max(acc, line.length), 0);
+		if (maxLen <= maxCharsPerLine) {
+			fittingCues += 1;
+		}
+		const cueChars = cue.lines.reduce((acc, line) => acc + line.length, 0);
+		const cueSpan = Math.max(0.1, cue.endSec - cue.startSec);
+		const cueCps = cueChars / cueSpan;
+		if (cueCps > 20) {
+			fastCueCount += 1;
+		}
+		totalChars += cueChars;
+		totalActiveSpan += cueSpan;
+		for (let idx = 0; idx < cue.lines.length; idx += 1) {
+			totalWords += countLineWords(cue.lines[idx]!, idx === 0);
+		}
+	}
+
+	const totalCues = cues.length;
+	const fitPercent = totalCues > 0 ? Math.round((fittingCues / totalCues) * 100) : 100;
+	const avgCps = totalActiveSpan > 0 ? Number((totalChars / totalActiveSpan).toFixed(1)) : 0;
+
+	return {
+		totalCues,
+		fittingCues,
+		fitPercent,
+		avgCps,
+		fastCueCount,
+		totalWords,
+		durationSec,
+	};
+}
+
+function isPillActive(pill: QuickModePill, opts: CueFormatOptions): boolean {
+	return (
+		pill.format === opts.format &&
+		pill.maxCharsPerLine === opts.maxCharsPerLine &&
+		pill.maxLinesPerCue === opts.maxLinesPerCue &&
+		pill.includeSpeakerPrefix === opts.includeSpeakerPrefix
+	);
+}
+
+const initialSample = SAMPLE_PAYLOADS[preset.defaultSampleId];
+const initialJson = initialSample.json;
+const initialBytes = new TextEncoder().encode(initialJson).byteLength;
+const initialResult = convertAsrJson(initialJson, preset.defaultOptions);
+const previewTimeFormat: 'srt' | 'vtt' = preset.defaultOptions.format === 'vtt' ? 'vtt' : 'srt';
+const previewCues = initialResult.ok ? initialResult.cues.slice(0, 25) : [];
+const totalCues = initialResult.ok ? initialResult.cues.length : 0;
+const initialHealth = initialResult.ok
+	? computeCueHealth(
+			initialResult.cues,
+			preset.defaultOptions.maxCharsPerLine,
+			initialResult.parsed.durationSec,
+		)
+	: null;
+---
+
+<section
+	aria-label="Subtitle converter workbench"
+	class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+	data-workbench
+	data-preset-slug={preset.slug || initialSample.filename.replace(/\.json$/i, '')}
+	data-max-cue-duration={String(preset.defaultOptions.maxCueDurationSec)}
+	data-pause-split-gap={String(preset.defaultOptions.pauseSplitGapSec)}
+>
+	<div class="border-b border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+		<div class="space-y-2">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Quick Workflow Mode
+				</span>
+				<span class="text-xs text-slate-500">
+					One click sets format, line width, line count, and speaker tags
+				</span>
+			</div>
+			<div
+				role="group"
+				aria-label="Quick subtitle formatting presets"
+				class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2"
+			>
+				{
+					QUICK_MODE_PILLS.map((pill) => {
+						const active = isPillActive(pill, preset.defaultOptions);
+						return (
+							<button
+								type="button"
+								data-mode-pill={pill.id}
+								data-format={pill.format}
+								data-max-chars={String(pill.maxCharsPerLine)}
+								data-max-lines={String(pill.maxLinesPerCue)}
+								data-speaker={pill.includeSpeakerPrefix ? 'true' : 'false'}
+								data-max-cue-duration={String(pill.maxCueDurationSec)}
+								data-pause-split-gap={String(pill.pauseSplitGapSec)}
+								aria-pressed={active ? 'true' : 'false'}
+								class="min-h-11 sm:min-h-10 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-left transition-colors hover:border-slate-400 hover:bg-slate-100/80 cursor-pointer flex items-center justify-between gap-2"
+							>
+								<span class="text-xs sm:text-sm font-semibold leading-tight">{pill.label}</span>
+								<span class="text-[11px] font-mono opacity-75 shrink-0">{pill.detail}</span>
+							</button>
+						);
+					})
+				}
+			</div>
+		</div>
+
+		<div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch">
+			<div class="lg:col-span-5 flex flex-col justify-between gap-1.5 rounded-xl border border-slate-200 bg-white p-3">
+				<label for="sample-select" class="text-xs font-semibold text-slate-700">
+					Built-in ASR Sample Dialect
+				</label>
+				<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+					<select
+						id="sample-select"
+						data-testid="sample-select"
+						class="min-h-11 sm:min-h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-600 focus:outline-none"
+					>
+						{
+							DIALECT_IDS.map((id) => (
+								<option value={id} selected={id === preset.defaultSampleId}>
+									{SAMPLE_PAYLOADS[id].label}
+								</option>
+							))
+						}
+					</select>
+					<button
+						type="button"
+						data-testid="load-sample-btn"
+						class="min-h-11 sm:min-h-10 shrink-0 rounded-lg border border-slate-300 bg-slate-100 px-3.5 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200/80 transition-colors cursor-pointer"
+					>
+						Load sample
+					</button>
+				</div>
+			</div>
+
+			<div
+				data-dropzone
+				data-drag-active="false"
+				class="lg:col-span-7 rounded-xl border-2 border-dashed border-slate-300 bg-white p-3 flex flex-col justify-between gap-2 hover:border-sky-400"
+			>
+				<div class="flex flex-wrap items-center justify-between gap-1">
+					<label for="file-upload" class="text-xs font-semibold text-slate-800 cursor-pointer">
+						Drop Local .json Transcript Here or Choose File
+					</label>
+					<span data-dropzone-badge class="text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+						No 2 MB cap / Zero upload
+					</span>
+				</div>
+				<input
+					id="file-upload"
+					data-testid="file-upload"
+					type="file"
+					accept=".json,application/json"
+					class="min-h-11 sm:min-h-10 block w-full text-xs text-slate-700 file:mr-3 file:min-h-9 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800 cursor-pointer"
+				/>
+			</div>
+		</div>
+
+		<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+			<div class="col-span-2 sm:col-span-2 lg:col-span-3 flex flex-col gap-1">
+				<label for="format-select" class="text-xs font-semibold text-slate-700">
+					Output Format
+				</label>
+				<select
+					id="format-select"
+					data-testid="format-select"
+					class="min-h-11 sm:min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-sky-600 focus:outline-none"
+				>
+					{
+						FORMAT_OPTIONS.map((fmt) => (
+							<option value={fmt.id} selected={fmt.id === preset.defaultOptions.format}>
+								{fmt.label}
+							</option>
+						))
+					}
+				</select>
+			</div>
+
+			<div class="col-span-1 sm:col-span-1 lg:col-span-2 flex flex-col gap-1">
+				<label for="max-chars-input" class="text-xs font-semibold text-slate-700">
+					Max Chars / Line
+				</label>
+				<input
+					id="max-chars-input"
+					data-testid="max-chars-input"
+					type="number"
+					min="8"
+					max="84"
+					value={preset.defaultOptions.maxCharsPerLine}
+					class="min-h-11 sm:min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 focus:border-sky-600 focus:outline-none"
+				/>
+			</div>
+
+			<div class="col-span-1 sm:col-span-1 lg:col-span-2 flex flex-col gap-1">
+				<label for="max-lines-select" class="text-xs font-semibold text-slate-700">
+					Max Lines / Cue
+				</label>
+				<select
+					id="max-lines-select"
+					data-testid="max-lines-select"
+					class="min-h-11 sm:min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 focus:border-sky-600 focus:outline-none"
+				>
+					<option value="1" selected={preset.defaultOptions.maxLinesPerCue === 1}>1 line</option>
+					<option value="2" selected={preset.defaultOptions.maxLinesPerCue === 2}>2 lines</option>
+				</select>
+			</div>
+
+			<div class="col-span-2 sm:col-span-2 lg:col-span-2 flex flex-col gap-1">
+				<label for="offset-ms-input" class="text-xs font-semibold text-slate-700">
+					Sync Offset (ms)
+				</label>
+				<input
+					id="offset-ms-input"
+					data-testid="offset-ms-input"
+					type="number"
+					step="50"
+					value={preset.defaultOptions.offsetMs}
+					class="min-h-11 sm:min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 focus:border-sky-600 focus:outline-none"
+				/>
+			</div>
+
+			<div class="col-span-2 sm:col-span-2 lg:col-span-3 flex flex-col justify-end">
+				<label
+					for="speaker-prefix-checkbox"
+					class="min-h-11 sm:min-h-10 w-full inline-flex items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 select-none cursor-pointer hover:bg-slate-50"
+				>
+					<input
+						id="speaker-prefix-checkbox"
+						data-testid="speaker-prefix-checkbox"
+						type="checkbox"
+						checked={preset.defaultOptions.includeSpeakerPrefix}
+						class="h-4 w-4 shrink-0 rounded border-slate-300 text-sky-600 focus:ring-sky-600"
+					/>
+					<span class="leading-tight">Include speaker prefix</span>
+				</label>
+			</div>
+		</div>
+
+		<div
+			data-testid="status-banner"
+			data-status={initialResult.ok ? 'ok' : 'error'}
+			role="status"
+			aria-live="polite"
+			class:list={[
+				'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border',
+				initialResult.ok
+					? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+					: 'bg-rose-50 border-rose-200 text-rose-900',
+			]}
+		>
+			{
+				initialResult.ok ? (
+					<span>
+						Detected: <strong>{initialResult.parsed.dialectLabel}</strong> | {initialResult.cues.length}{' '}
+						{initialResult.cues.length === 1 ? 'cue' : 'cues'} | Duration:{' '}
+						{formatDuration(initialResult.parsed.durationSec)} | Size: {formatByteSize(initialBytes)}
+					</span>
+				) : (
+					<span>JSON parse error: {initialResult.error}</span>
+				)
+			}
+		</div>
+
+		<div
+			data-testid="cue-health-summary"
+			data-health-state={initialHealth ? (initialHealth.fastCueCount > 0 || initialHealth.avgCps > 20 ? 'warn' : 'ok') : 'empty'}
+			aria-label="Subtitle reading speed and line-fit health summary"
+			class="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5"
+		>
+			{
+				initialHealth ? (
+					<>
+						<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs">
+							<div class="rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between gap-2">
+								<span class="text-slate-600 font-medium">Line-Fit (&lt;={preset.defaultOptions.maxCharsPerLine}c)</span>
+								<strong class="font-mono tabular-nums text-slate-950">
+									{initialHealth.fitPercent}% ({initialHealth.fittingCues}/{initialHealth.totalCues})
+								</strong>
+							</div>
+							<div
+								class:list={[
+									'rounded-lg border px-3 py-2 flex items-center justify-between gap-2',
+									initialHealth.fastCueCount > 0 || initialHealth.avgCps > 20
+										? 'bg-amber-50 border-amber-300 text-amber-950'
+										: 'bg-emerald-50/70 border-emerald-200 text-emerald-950',
+								]}
+							>
+								<span class="font-medium">Reading Speed</span>
+								<strong class="font-mono tabular-nums">
+									{initialHealth.avgCps.toFixed(1)} CPS ({initialHealth.fastCueCount > 0 ? `${initialHealth.fastCueCount} >20 CPS` : 'pace OK'})
+								</strong>
+							</div>
+							<div class="rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between gap-2">
+								<span class="text-slate-600 font-medium">Words / Cues</span>
+								<strong class="font-mono tabular-nums text-slate-950">
+									{initialHealth.totalWords} words / {initialHealth.totalCues} {initialHealth.totalCues === 1 ? 'cue' : 'cues'}
+								</strong>
+							</div>
+							<div class="rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between gap-2">
+								<span class="text-slate-600 font-medium">Track Duration</span>
+								<strong class="font-mono tabular-nums text-slate-950">
+									{formatDuration(initialHealth.durationSec)}
+								</strong>
+							</div>
+						</div>
+						<div class="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+							<div
+								class:list={[
+									'h-full rounded-full transition-all duration-200',
+									initialHealth.fitPercent === 100 ? 'bg-emerald-500' : 'bg-amber-500',
+								]}
+								style={`width: ${initialHealth.fitPercent}%`}
+							/>
+						</div>
+					</>
+				) : (
+					<p class="text-xs text-slate-500">
+						Provide valid ASR JSON above to inspect line-fit percentage, CPS reading speed, word count, and duration.
+					</p>
+				)
+			}
+		</div>
+	</div>
+
+	<div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+		<div class="p-4 sm:p-6 flex flex-col gap-2 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2 min-h-10">
+				<label for="json-input" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					ASR Transcript JSON Input
+				</label>
+				<span data-json-hint class="text-xs text-slate-500 font-mono">
+					Auto-converts on edit or file drop
+				</span>
+			</div>
+			<textarea
+				id="json-input"
+				data-testid="json-input"
+				rows="16"
+				spellcheck="false"
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="off"
+				placeholder="Paste OpenAI Whisper verbose_json, WhisperX, whisper.cpp, Deepgram, or AssemblyAI JSON here..."
+				class="w-full rounded-xl border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{initialJson}</textarea>
+		</div>
+
+		<div class="p-4 sm:p-6 flex flex-col gap-2 bg-slate-50/40 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<label for="subtitle-output" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Converted Subtitle Output
+				</label>
+				<div class="flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						data-testid="copy-output-btn"
+						class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+					>
+						Copy output
+					</button>
+					<button
+						type="button"
+						data-testid="download-output-btn"
+						class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50"
+					>
+						Download .{preset.defaultOptions.format}
+					</button>
+				</div>
+			</div>
+			<textarea
+				id="subtitle-output"
+				data-testid="subtitle-output"
+				rows="16"
+				readonly
+				spellcheck="false"
+				autocomplete="off"
+				class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{initialResult.ok ? initialResult.output : ''}</textarea>
+		</div>
+	</div>
+
+	<div class="border-t border-slate-200 p-4 sm:p-6 space-y-3">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h2 class="text-sm font-bold text-slate-900">
+				Cue Timing, Reading Speed &amp; Line-Width Preview (First 25 Cues)
+			</h2>
+			<span data-preview-caption class="text-xs text-slate-500 tabular-nums">
+				Showing {previewCues.length} of {totalCues} cues
+			</span>
+		</div>
+
+		<div class="overflow-x-auto rounded-xl border border-slate-200">
+			<table data-testid="cue-preview-table" class="w-full text-left border-collapse text-xs">
+				<thead>
+					<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider">
+						<th scope="col" class="py-2.5 px-3 font-semibold w-12">#</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-32">Start</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-32">End</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-24">Max Chars</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-24">Speed</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Cue Lines</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-100 bg-white">
+					{
+						previewCues.map((cue) => {
+							const maxLen = cue.lines.reduce((acc, line) => Math.max(acc, line.length), 0);
+							const cueChars = cue.lines.reduce((acc, line) => acc + line.length, 0);
+							const cueCps = cueChars / Math.max(0.1, cue.endSec - cue.startSec);
+							const isOverWidth = maxLen > preset.defaultOptions.maxCharsPerLine;
+							const isFast = cueCps > 20;
+							return (
+								<tr>
+									<td class="py-2 px-3 font-mono tabular-nums text-slate-500">{cue.index}</td>
+									<td class="py-2 px-3 font-mono tabular-nums text-slate-700">
+										{formatTimestamp(cue.startSec, previewTimeFormat)}
+									</td>
+									<td class="py-2 px-3 font-mono tabular-nums text-slate-700">
+										{formatTimestamp(cue.endSec, previewTimeFormat)}
+									</td>
+									<td
+										class:list={[
+											'py-2 px-3 font-mono tabular-nums',
+											isOverWidth ? 'text-amber-800 font-semibold' : 'text-slate-700',
+										]}
+									>
+										{maxLen}
+									</td>
+									<td
+										class:list={[
+											'py-2 px-3 font-mono tabular-nums',
+											isFast ? 'text-amber-800 font-semibold' : 'text-slate-600',
+										]}
+									>
+										{cueCps.toFixed(1)} CPS
+									</td>
+									<td class="py-2 px-3 font-mono text-slate-900 space-y-0.5">
+										{cue.lines.map((line) => (
+											<div>{line}</div>
+										))}
+									</td>
+								</tr>
+							);
+						})
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</section>
+
+<script>
+	import { trackToolEvent } from '../lib/analytics';
+	import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
+	import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
+	import type { CueFormatOptions, DialectId, OutputFormat, SubtitleCue } from '../lib/types';
+
+	interface CueHealthSummary {
+		totalCues: number;
+		fittingCues: number;
+		fitPercent: number;
+		avgCps: number;
+		fastCueCount: number;
+		totalWords: number;
+		durationSec: number;
+	}
+
+	const LARGE_INPUT_PREVIEW_CHARS = 32_768;
+	const LARGE_INPUT_THRESHOLD_CHARS = 500_000;
+	const LARGE_OUTPUT_THRESHOLD_CHARS = 1_500_000;
+	const CJK_COUNT_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g;
+
+	const MIME_BY_FORMAT: Record<OutputFormat, string> = {
+		srt: 'application/x-subrip;charset=utf-8',
+		vtt: 'text/vtt;charset=utf-8',
+		txt: 'text/plain;charset=utf-8',
+		csv: 'text/csv;charset=utf-8',
+	};
+
+	function formatByteSize(bytes: number): string {
+		if (bytes >= 1_000_000) {
+			return `${(bytes / 1_000_000).toFixed(2)} MB`;
+		}
+		if (bytes >= 1_000) {
+			return `${(bytes / 1_000).toFixed(1)} KB`;
+		}
+		return `${bytes} B`;
+	}
+
+	function formatDuration(sec: number): string {
+		const safe = Math.max(0, Number.isFinite(sec) ? sec : 0);
+		const mins = Math.floor(safe / 60);
+		const rem = safe - mins * 60;
+		const mm = String(mins).padStart(2, '0');
+		const ss = rem.toFixed(1).padStart(4, '0');
+		return `${mm}:${ss} (${safe.toFixed(1)}s)`;
+	}
+
+	function countLineWords(line: string, stripSpeakerTag: boolean): number {
+		const cleaned = stripSpeakerTag ? line.replace(/^\[[^\]]+\]\s*/, '') : line;
+		const cjkMatches = cleaned.match(CJK_COUNT_RE);
+		const nonCjk = cleaned.replace(CJK_COUNT_RE, ' ').trim();
+		const latinWords = nonCjk ? nonCjk.split(/\s+/).length : 0;
+		return (cjkMatches ? cjkMatches.length : 0) + latinWords;
+	}
+
+	function computeCueHealth(
+		cues: SubtitleCue[],
+		maxCharsPerLine: number,
+		durationSec: number,
+	): CueHealthSummary {
+		let fittingCues = 0;
+		let fastCueCount = 0;
+		let totalChars = 0;
+		let totalActiveSpan = 0;
+		let totalWords = 0;
+
+		for (const cue of cues) {
+			const maxLen = cue.lines.reduce((acc, line) => Math.max(acc, line.length), 0);
+			if (maxLen <= maxCharsPerLine) {
+				fittingCues += 1;
+			}
+			const cueChars = cue.lines.reduce((acc, line) => acc + line.length, 0);
+			const cueSpan = Math.max(0.1, cue.endSec - cue.startSec);
+			const cueCps = cueChars / cueSpan;
+			if (cueCps > 20) {
+				fastCueCount += 1;
+			}
+			totalChars += cueChars;
+			totalActiveSpan += cueSpan;
+			for (let idx = 0; idx < cue.lines.length; idx += 1) {
+				totalWords += countLineWords(cue.lines[idx]!, idx === 0);
+			}
+		}
+
+		const totalCues = cues.length;
+		const fitPercent = totalCues > 0 ? Math.round((fittingCues / totalCues) * 100) : 100;
+		const avgCps = totalActiveSpan > 0 ? Number((totalChars / totalActiveSpan).toFixed(1)) : 0;
+
+		return {
+			totalCues,
+			fittingCues,
+			fitPercent,
+			avgCps,
+			fastCueCount,
+			totalWords,
+			durationSec,
+		};
+	}
+
+	function createMetricCell(
+		label: string,
+		value: string,
+		tone: 'neutral' | 'ok' | 'amber' = 'neutral',
+	): HTMLDivElement {
+		const box = document.createElement('div');
+		if (tone === 'amber') {
+			box.className =
+				'rounded-lg border px-3 py-2 flex items-center justify-between gap-2 bg-amber-50 border-amber-300 text-amber-950';
+		} else if (tone === 'ok') {
+			box.className =
+				'rounded-lg border px-3 py-2 flex items-center justify-between gap-2 bg-emerald-50/70 border-emerald-200 text-emerald-950';
+		} else {
+			box.className =
+				'rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between gap-2';
+		}
+
+		const labelSpan = document.createElement('span');
+		labelSpan.className = tone === 'neutral' ? 'text-slate-600 font-medium' : 'font-medium';
+		labelSpan.textContent = label;
+
+		const valueStrong = document.createElement('strong');
+		valueStrong.className =
+			tone === 'neutral' ? 'font-mono tabular-nums text-slate-950' : 'font-mono tabular-nums';
+		valueStrong.textContent = value;
+
+		box.append(labelSpan, valueStrong);
+		return box;
+	}
+
+	function bindWorkbench(root: HTMLElement): void {
+		const jsonInput = root.querySelector<HTMLTextAreaElement>('[data-testid="json-input"]');
+		const fileUpload = root.querySelector<HTMLInputElement>('[data-testid="file-upload"]');
+		const dropzone = root.querySelector<HTMLElement>('[data-dropzone]');
+		const dropzoneBadge = root.querySelector<HTMLElement>('[data-dropzone-badge]');
+		const modePills = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-mode-pill]'));
+		const sampleSelect = root.querySelector<HTMLSelectElement>('[data-testid="sample-select"]');
+		const loadSampleBtn = root.querySelector<HTMLButtonElement>('[data-testid="load-sample-btn"]');
+		const formatSelect = root.querySelector<HTMLSelectElement>('[data-testid="format-select"]');
+		const maxCharsInput = root.querySelector<HTMLInputElement>('[data-testid="max-chars-input"]');
+		const maxLinesSelect = root.querySelector<HTMLSelectElement>('[data-testid="max-lines-select"]');
+		const offsetMsInput = root.querySelector<HTMLInputElement>('[data-testid="offset-ms-input"]');
+		const speakerCheckbox = root.querySelector<HTMLInputElement>('[data-testid="speaker-prefix-checkbox"]');
+		const statusBanner = root.querySelector<HTMLElement>('[data-testid="status-banner"]');
+		const cueHealthBox = root.querySelector<HTMLElement>('[data-testid="cue-health-summary"]');
+		const subtitleOutput = root.querySelector<HTMLTextAreaElement>('[data-testid="subtitle-output"]');
+		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="copy-output-btn"]');
+		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="download-output-btn"]');
+		const previewTable = root.querySelector<HTMLTableElement>('[data-testid="cue-preview-table"]');
+		const previewCaption = root.querySelector<HTMLElement>('[data-preview-caption]');
+		const jsonHint = root.querySelector<HTMLElement>('[data-json-hint]');
+
+		if (
+			!jsonInput ||
+			!fileUpload ||
+			!sampleSelect ||
+			!loadSampleBtn ||
+			!formatSelect ||
+			!maxCharsInput ||
+			!maxLinesSelect ||
+			!offsetMsInput ||
+			!speakerCheckbox ||
+			!statusBanner ||
+			!subtitleOutput ||
+			!copyBtn ||
+			!downloadBtn ||
+			!previewTable
+		) {
+			return;
+		}
+
+		const tbody = previewTable.querySelector('tbody');
+		const encoder = new TextEncoder();
+		let activeMaxCueDurationSec = Number(root.dataset.maxCueDuration) || 6;
+		let activePauseSplitGapSec = Number(root.dataset.pauseSplitGap) || 0.6;
+		const defaultMaxChars = Number(maxCharsInput.value) || 42;
+
+		let activeRawJson = jsonInput.value;
+		if (!activeRawJson.trim()) {
+			const sample = SAMPLE_PAYLOADS[sampleSelect.value as DialectId];
+			activeRawJson = sample.json;
+			jsonInput.value = activeRawJson;
+		}
+		let activeByteLength = encoder.encode(activeRawJson).byteLength;
+		let activeBaseName = root.dataset.presetSlug || 'whisper-subtitles';
+		let fullOutputText = subtitleOutput.value;
+
+		const readOptions = (): CueFormatOptions => {
+			const format = (formatSelect.value as OutputFormat) || 'srt';
+			const parsedChars = Number.parseInt(maxCharsInput.value, 10);
+			const maxCharsPerLine = Number.isFinite(parsedChars)
+				? Math.min(84, Math.max(8, parsedChars))
+				: defaultMaxChars;
+			const maxLinesPerCue: 1 | 2 = maxLinesSelect.value === '1' ? 1 : 2;
+			const parsedOffset = Number(offsetMsInput.value);
+			const offsetMs = Number.isFinite(parsedOffset) ? parsedOffset : 0;
+			const includeSpeakerPrefix = speakerCheckbox.checked;
+
+			return {
+				format,
+				maxCharsPerLine,
+				maxLinesPerCue,
+				maxCueDurationSec: activeMaxCueDurationSec,
+				pauseSplitGapSec: activePauseSplitGapSec,
+				offsetMs,
+				includeSpeakerPrefix,
+			};
+		};
+
+		const syncActiveModePill = (options: CueFormatOptions): void => {
+			for (const pill of modePills) {
+				const matches =
+					pill.dataset.format === options.format &&
+					Number(pill.dataset.maxChars) === options.maxCharsPerLine &&
+					Number(pill.dataset.maxLines) === options.maxLinesPerCue &&
+					(pill.dataset.speaker === 'true') === options.includeSpeakerPrefix;
+				pill.setAttribute('aria-pressed', matches ? 'true' : 'false');
+			}
+		};
+
+		const renderCueHealth = (
+			cues: SubtitleCue[] | null,
+			maxCharsPerLine: number,
+			durationSec: number,
+		): void => {
+			if (!cueHealthBox) return;
+			if (!cues) {
+				cueHealthBox.dataset.healthState = 'empty';
+				const msg = document.createElement('p');
+				msg.className = 'text-xs text-slate-500';
+				msg.textContent =
+					'Provide valid ASR JSON above to inspect line-fit percentage, CPS reading speed, word count, and duration.';
+				cueHealthBox.replaceChildren(msg);
+				return;
+			}
+
+			const summary = computeCueHealth(cues, maxCharsPerLine, durationSec);
+			const hasFastWarning = summary.fastCueCount > 0 || summary.avgCps > 20;
+			cueHealthBox.dataset.healthState = hasFastWarning ? 'warn' : 'ok';
+
+			const grid = document.createElement('div');
+			grid.className = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs';
+
+			const cueLabel = summary.totalCues === 1 ? 'cue' : 'cues';
+			const speedDetail =
+				summary.fastCueCount > 0 ? `${summary.fastCueCount} >20 CPS` : 'pace OK';
+
+			grid.append(
+				createMetricCell(
+					`Line-Fit (<=${maxCharsPerLine}c)`,
+					`${summary.fitPercent}% (${summary.fittingCues}/${summary.totalCues})`,
+					summary.fitPercent === 100 ? 'neutral' : 'amber',
+				),
+				createMetricCell(
+					'Reading Speed',
+					`${summary.avgCps.toFixed(1)} CPS (${speedDetail})`,
+					hasFastWarning ? 'amber' : 'ok',
+				),
+				createMetricCell(
+					'Words / Cues',
+					`${summary.totalWords} words / ${summary.totalCues} ${cueLabel}`,
+					'neutral',
+				),
+				createMetricCell('Track Duration', formatDuration(summary.durationSec), 'neutral'),
+			);
+
+			const track = document.createElement('div');
+			track.className = 'h-2 w-full rounded-full bg-slate-100 overflow-hidden';
+			const bar = document.createElement('div');
+			bar.className =
+				summary.fitPercent === 100
+					? 'h-full rounded-full transition-all duration-200 bg-emerald-500'
+					: 'h-full rounded-full transition-all duration-200 bg-amber-500';
+			bar.style.width = `${summary.fitPercent}%`;
+			track.appendChild(bar);
+
+			cueHealthBox.replaceChildren(grid, track);
+		};
+
+		const renderCuePreview = (
+			cues: SubtitleCue[],
+			format: OutputFormat,
+			maxCharsPerLine: number,
+		): void => {
+			if (!tbody) return;
+			tbody.replaceChildren();
+			const slice = cues.slice(0, 25);
+			const timeFmt: 'srt' | 'vtt' = format === 'vtt' ? 'vtt' : 'srt';
+
+			if (previewCaption) {
+				previewCaption.textContent = `Showing ${slice.length} of ${cues.length} cues`;
+			}
+
+			if (slice.length === 0) {
+				const emptyRow = document.createElement('tr');
+				const cell = document.createElement('td');
+				cell.colSpan = 6;
+				cell.className = 'py-4 px-3 text-center text-slate-500';
+				cell.textContent = 'No valid subtitle cues to preview.';
+				emptyRow.appendChild(cell);
+				tbody.appendChild(emptyRow);
+				return;
+			}
+
+			const fragment = document.createDocumentFragment();
+			for (const cue of slice) {
+				const row = document.createElement('tr');
+
+				const indexCell = document.createElement('td');
+				indexCell.className = 'py-2 px-3 font-mono tabular-nums text-slate-500';
+				indexCell.textContent = String(cue.index);
+
+				const startCell = document.createElement('td');
+				startCell.className = 'py-2 px-3 font-mono tabular-nums text-slate-700';
+				startCell.textContent = formatTimestamp(cue.startSec, timeFmt);
+
+				const endCell = document.createElement('td');
+				endCell.className = 'py-2 px-3 font-mono tabular-nums text-slate-700';
+				endCell.textContent = formatTimestamp(cue.endSec, timeFmt);
+
+				const maxLen = cue.lines.reduce((acc, line) => Math.max(acc, line.length), 0);
+				const lenCell = document.createElement('td');
+				lenCell.className =
+					maxLen > maxCharsPerLine
+						? 'py-2 px-3 font-mono tabular-nums text-amber-800 font-semibold'
+						: 'py-2 px-3 font-mono tabular-nums text-slate-700';
+				lenCell.textContent = String(maxLen);
+
+				const cueChars = cue.lines.reduce((acc, line) => acc + line.length, 0);
+				const cueCps = cueChars / Math.max(0.1, cue.endSec - cue.startSec);
+				const cpsCell = document.createElement('td');
+				cpsCell.className =
+					cueCps > 20
+						? 'py-2 px-3 font-mono tabular-nums text-amber-800 font-semibold'
+						: 'py-2 px-3 font-mono tabular-nums text-slate-600';
+				cpsCell.textContent = `${cueCps.toFixed(1)} CPS`;
+
+				const linesCell = document.createElement('td');
+				linesCell.className = 'py-2 px-3 font-mono text-slate-900 space-y-0.5';
+				for (const line of cue.lines) {
+					const div = document.createElement('div');
+					div.textContent = line;
+					linesCell.appendChild(div);
+				}
+
+				row.append(indexCell, startCell, endCell, lenCell, cpsCell, linesCell);
+				fragment.appendChild(row);
+			}
+			tbody.appendChild(fragment);
+		};
+
+		const runConversion = (): void => {
+			const options = readOptions();
+			syncActiveModePill(options);
+			downloadBtn.textContent = `Download .${options.format}`;
+
+			const result = convertAsrJson(activeRawJson, options);
+
+			if (result.ok) {
+				statusBanner.dataset.status = 'ok';
+				statusBanner.className =
+					'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border bg-emerald-50/80 border-emerald-200 text-emerald-950';
+				const summarySpan = document.createElement('span');
+				const labelPrefix = document.createTextNode('Detected: ');
+				const strongDialect = document.createElement('strong');
+				strongDialect.textContent = result.parsed.dialectLabel;
+				const cueWord = result.cues.length === 1 ? 'cue' : 'cues';
+				const restText = document.createTextNode(
+					` | ${result.cues.length} ${cueWord} | Duration: ${formatDuration(result.parsed.durationSec)} | Size: ${formatByteSize(activeByteLength)}`,
+				);
+				summarySpan.append(labelPrefix, strongDialect, restText);
+				statusBanner.replaceChildren(summarySpan);
+
+				fullOutputText = result.output;
+				subtitleOutput.value =
+					fullOutputText.length > LARGE_OUTPUT_THRESHOLD_CHARS
+						? `${fullOutputText.slice(0, 250_000)}\n\n[Output preview truncated in editor for responsiveness. Click Download .${options.format} or Copy output for the complete subtitle file.]`
+						: fullOutputText;
+				copyBtn.disabled = fullOutputText.length === 0;
+				downloadBtn.disabled = fullOutputText.length === 0;
+				renderCueHealth(result.cues, options.maxCharsPerLine, result.parsed.durationSec);
+				renderCuePreview(result.cues, options.format, options.maxCharsPerLine);
+			} else {
+				statusBanner.dataset.status = 'error';
+				statusBanner.className =
+					'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border bg-rose-50 border-rose-200 text-rose-900';
+				const errSpan = document.createElement('span');
+				errSpan.textContent = `JSON parse error: ${result.error}`;
+				statusBanner.replaceChildren(errSpan);
+
+				fullOutputText = '';
+				subtitleOutput.value = '';
+				copyBtn.disabled = true;
+				downloadBtn.disabled = true;
+				renderCueHealth(null, options.maxCharsPerLine, 0);
+				renderCuePreview([], options.format, options.maxCharsPerLine);
+			}
+		};
+
+		const loadSelectedSample = (): void => {
+			const dialect = sampleSelect.value as DialectId;
+			const sample = SAMPLE_PAYLOADS[dialect];
+			const sampleText = sample.json;
+			activeRawJson = sampleText;
+			activeByteLength = encoder.encode(sampleText).byteLength;
+			activeBaseName = sample.filename.replace(/\.json$/i, '') || dialect;
+			jsonInput.value = sampleText;
+			if (jsonHint) {
+				jsonHint.textContent = `Sample loaded (${formatByteSize(activeByteLength)})`;
+			}
+			runConversion();
+			trackToolEvent('sample_loaded', { dialect });
+		};
+
+		const ingestLocalFile = async (file: File): Promise<void> => {
+			const text = await file.text();
+			const bytes = file.size > 0 ? file.size : encoder.encode(text).byteLength;
+			activeRawJson = text;
+			activeByteLength = bytes;
+			activeBaseName = file.name.replace(/\.json$/i, '') || 'transcript';
+
+			if (text.length > LARGE_INPUT_THRESHOLD_CHARS) {
+				jsonInput.value = text.slice(0, LARGE_INPUT_PREVIEW_CHARS);
+				if (jsonHint) {
+					jsonHint.textContent = `Loaded local file (${formatByteSize(bytes)}, 32 KB editor preview)`;
+				}
+			} else {
+				jsonInput.value = text;
+				if (jsonHint) {
+					jsonHint.textContent = `Loaded local file (${formatByteSize(bytes)})`;
+				}
+			}
+			if (dropzoneBadge) {
+				dropzoneBadge.textContent = `Loaded ${formatByteSize(bytes)} locally`;
+			}
+			runConversion();
+			const sizeBucket: 'gt_2mb' | 'lte_2mb' = bytes > 2_000_000 ? 'gt_2mb' : 'lte_2mb';
+			trackToolEvent('file_loaded', { size_bucket: sizeBucket });
+		};
+
+		for (const pill of modePills) {
+			pill.addEventListener('click', () => {
+				if (pill.dataset.format) {
+					formatSelect.value = pill.dataset.format;
+				}
+				if (pill.dataset.maxChars) {
+					maxCharsInput.value = pill.dataset.maxChars;
+				}
+				if (pill.dataset.maxLines) {
+					maxLinesSelect.value = pill.dataset.maxLines;
+				}
+				speakerCheckbox.checked = pill.dataset.speaker === 'true';
+				activeMaxCueDurationSec = Number(pill.dataset.maxCueDuration) || 6;
+				activePauseSplitGapSec = Number(pill.dataset.pauseSplitGap) || 0.6;
+				runConversion();
+			});
+		}
+
+		if (dropzone) {
+			dropzone.addEventListener('dragenter', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = 'copy';
+				}
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragleave', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				const related = event.relatedTarget as Node | null;
+				if (!related || !dropzone.contains(related)) {
+					dropzone.dataset.dragActive = 'false';
+				}
+			});
+
+			dropzone.addEventListener('drop', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'false';
+				const file = event.dataTransfer?.files?.[0];
+				if (file) {
+					void ingestLocalFile(file);
+				}
+			});
+		}
+
+		jsonInput.addEventListener('dragover', (event) => {
+			if (event.dataTransfer?.types.includes('Files')) {
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		});
+
+		jsonInput.addEventListener('drop', (event) => {
+			const file = event.dataTransfer?.files?.[0];
+			if (file) {
+				event.preventDefault();
+				void ingestLocalFile(file);
+			}
+		});
+
+		jsonInput.addEventListener('input', () => {
+			activeRawJson = jsonInput.value;
+			activeByteLength = encoder.encode(activeRawJson).byteLength;
+			if (jsonHint) {
+				jsonHint.textContent = 'Live input buffer';
+			}
+			runConversion();
+		});
+
+		fileUpload.addEventListener('change', () => {
+			const file = fileUpload.files?.[0];
+			if (!file) return;
+			void ingestLocalFile(file);
+		});
+
+		sampleSelect.addEventListener('change', loadSelectedSample);
+		loadSampleBtn.addEventListener('click', loadSelectedSample);
+
+		formatSelect.addEventListener('change', runConversion);
+		maxCharsInput.addEventListener('input', runConversion);
+		maxCharsInput.addEventListener('blur', () => {
+			const parsed = Number.parseInt(maxCharsInput.value, 10);
+			const clamped = Number.isFinite(parsed) ? Math.min(84, Math.max(8, parsed)) : defaultMaxChars;
+			maxCharsInput.value = String(clamped);
+			runConversion();
+		});
+		maxLinesSelect.addEventListener('change', runConversion);
+		offsetMsInput.addEventListener('input', runConversion);
+		speakerCheckbox.addEventListener('change', runConversion);
+
+		copyBtn.addEventListener('click', async () => {
+			if (!fullOutputText) return;
+			const format = (formatSelect.value as OutputFormat) || 'srt';
+			try {
+				await navigator.clipboard.writeText(fullOutputText);
+			} catch {
+				subtitleOutput.select();
+				document.execCommand('copy');
+			}
+			trackToolEvent('subtitle_export', { export_action: 'copy', output_format: format });
+			const originalLabel = copyBtn.textContent;
+			copyBtn.textContent = 'Copied';
+			window.setTimeout(() => {
+				copyBtn.textContent = originalLabel;
+			}, 1400);
+		});
+
+		downloadBtn.addEventListener('click', () => {
+			if (!fullOutputText) return;
+			const format = (formatSelect.value as OutputFormat) || 'srt';
+			const blob = new Blob([fullOutputText], { type: MIME_BY_FORMAT[format] });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = `${activeBaseName}.${format}`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', { export_action: 'download', output_format: format });
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		runConversion();
+	}
+
+	document.querySelectorAll<HTMLElement>('[data-workbench]').forEach(bindWorkbench);
+</script>

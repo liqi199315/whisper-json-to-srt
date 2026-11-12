@@ -1,0 +1,225 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const siteOrigin = (
+	Astro.site?.toString() ??
+	import.meta.env.PUBLIC_SITE_URL ??
+	'https://jsontosrt.com'
+).replace(/\/$/, '');
+const canonicalUrl = `${siteOrigin}/about/`;
+
+const jsonLdGraph = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'Organization',
+			'@id': `${siteOrigin}/#organization`,
+			name: 'JSON to SRT',
+			url: `${siteOrigin}/`,
+			email: 'hello@jsontosrt.com',
+			description:
+				'Independent browser-local subtitle conversion utility for OpenAI Whisper, WhisperX, whisper.cpp, Deepgram Nova, and AssemblyAI JSON transcripts.',
+			contactPoint: {
+				'@type': 'ContactPoint',
+				email: 'hello@jsontosrt.com',
+				contactType: 'technical support',
+			},
+		},
+		{
+			'@type': 'BreadcrumbList',
+			'@id': `${canonicalUrl}#breadcrumb`,
+			itemListElement: [
+				{
+					'@type': 'ListItem',
+					position: 1,
+					name: 'JSON to SRT Converter',
+					item: `${siteOrigin}/`,
+				},
+				{
+					'@type': 'ListItem',
+					position: 2,
+					name: 'About',
+					item: canonicalUrl,
+				},
+			],
+		},
+	],
+};
+
+const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
+---
+
+<BaseLayout
+	title="About JSON to SRT | 100% Browser-Local Subtitle Architecture"
+	description="Learn how JSON to SRT parses Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON locally in browser RAM and validates SRT and WebVTT timing accuracy."
+	canonicalPath="/about/"
+>
+	<article class="max-w-4xl mx-auto space-y-8">
+		<script is:inline type="application/ld+json" set:html={jsonLdSerialized} />
+
+		<header class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<div class="inline-flex flex-wrap items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-900">
+				<span>100% Client-Side RAM Execution</span>
+				<span class="text-emerald-400">/</span>
+				<span>Clean-Room MIT Open Source</span>
+				<span class="text-emerald-400">/</span>
+				<span>Spec-Tested Subtitle Output</span>
+			</div>
+			<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950">
+				About JSON to SRT and Our 100% Browser-Local Subtitle Architecture
+			</h1>
+			<p class="text-sm sm:text-base text-slate-600 leading-relaxed">
+				JSON to SRT (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code>) is an engineering utility built for video editors, podcast producers, localization teams, and speech-to-text developers who need accurate <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">.srt</code>, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">.vtt</code>, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">.txt</code>, and <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">.csv</code> subtitle files without uploading confidential transcripts to a third-party server.
+			</p>
+		</header>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				Why We Built a Zero-Upload Browser Architecture
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				Automated speech recognition APIs output rich JSON structures containing word-level timestamps, confidence scores, token arrays, and speaker diarization turns. A single 60-minute podcast transcribed with OpenAI <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">verbose_json</code> or WhisperX routinely produces a 3 MB to 8 MB JSON file. Most online subtitle converters upload those files to remote servers and block files above 1 MB or 2 MB behind recurring paywalls.
+			</p>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				Uploading raw transcripts also creates compliance problems when working with unannounced product interviews, client discovery calls, legal depositions, or academic research under non-disclosure agreements. JSON to SRT eliminates server round-trips entirely:
+			</p>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+				<li>
+					<strong>Local file reading:</strong> Dropped or selected files are read directly inside your browser tab via the Web <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">File.text()</code> API. No multipart form upload or remote storage bucket exists.
+				</li>
+				<li>
+					<strong>In-memory cue reflow:</strong> Dialect detection, timestamp normalization, pause-gap splitting, and character-width wrapping run synchronously in your device memory. Large multi-megabyte transcripts truncate only the visual textarea preview above 32 KB of input so typing and scrolling stay responsive while the export buffer retains every cue.
+				</li>
+				<li>
+					<strong>Direct Blob downloads:</strong> Clicking download constructs a UTF-8 <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">Blob</code> and triggers a local <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">URL.createObjectURL()</code> save dialog that is revoked immediately after export.
+				</li>
+			</ul>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				How Timestamps and Word-Level Splitting Are Tested Against SRT and WebVTT Specs
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				Raw speech-to-text segments often span 8 to 15 seconds and exceed 120 characters, overflowing timeline monitors in Premiere Pro, DaVinci Resolve, Final Cut Pro, CapCut, and web video players. Naive converters also introduce subtle millisecond rounding bugs that reject subtitle imports in strict broadcast validators.
+			</p>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				Every build of JSON to SRT runs an automated Vitest unit suite and a Playwright Chromium end-to-end suite verifying the following timing and formatting invariants:
+			</p>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+					<h3 class="text-sm font-semibold text-slate-950">Millisecond carry-safe rounding</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						Floating-point timestamps such as <code class="font-mono text-xs">1.9996s</code> or <code class="font-mono text-xs">59.9996s</code> are converted to rounded integer milliseconds before decomposing hours, minutes, and seconds, preventing invalid <code class="font-mono text-xs">00:00:01,1000</code> carry overflows.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+					<h3 class="text-sm font-semibold text-slate-950">Strict SubRip and W3C WebVTT syntax</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						SRT exports enforce 1-based sequential cue numbers and comma separators (<code class="font-mono text-xs">HH:MM:SS,mmm --&gt; HH:MM:SS,mmm</code>). WebVTT exports emit a compliant <code class="font-mono text-xs">WEBVTT</code> file header and dot separators (<code class="font-mono text-xs">HH:MM:SS.mmm</code>).
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+					<h3 class="text-sm font-semibold text-slate-950">Word-level pause and turn splitting</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						When word arrays exist, cues split cleanly at natural speech pauses (configurable gap threshold), speaker turn boundaries, maximum cue durations, and exact line-character budgets (8 to 84 characters across 1 or 2 lines).
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+					<h3 class="text-sm font-semibold text-slate-950">Unaligned word &amp; CJK fallback</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						Numeric tokens skipped by forced aligners in WhisperX receive interpolated timestamps from neighboring words. Segment-only transcripts and CJK text without spaces split proportionally by character count while keeping punctuation off line starts.
+					</p>
+				</div>
+			</div>
+			<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+				Negative timestamp offsets clamp safely at <code class="font-mono text-xs">00:00:00,000</code> and enforce a minimum 50-millisecond cue duration (<code class="font-mono text-xs">endSec &gt; startSec</code>) so shifted tracks never produce zero-length or inverted cues.
+			</p>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				Supported ASR Engines and JSON Schemas
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				The parser automatically inspects top-level keys and normalizes five widely used speech recognition JSON formats into a unified cue timeline:
+			</p>
+			<div class="overflow-x-auto rounded-xl border border-slate-200">
+				<table class="w-full text-left border-collapse text-xs sm:text-sm">
+					<thead>
+						<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-xs">
+							<th scope="col" class="py-2.5 px-3 font-semibold">ASR Engine / Format</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Detected JSON Fields</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Dedicated Preset</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">OpenAI Whisper API (<code class="font-mono text-xs">verbose_json</code>)</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">segments[]</code> and top-level or nested <code class="font-mono text-xs">words[]</code> with float second <code class="font-mono text-xs">start</code> / <code class="font-mono text-xs">end</code>
+							</td>
+							<td class="py-3 px-3">
+								<a href="/whisper-verbose-json-to-srt/" class="text-sky-700 font-medium hover:underline">Verbose JSON preset</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">WhisperX (Pyannote Diarized)</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">segments[]</code> with <code class="font-mono text-xs">speaker</code> labels (<code class="font-mono text-xs">SPEAKER_00</code>) and aligned word objects
+							</td>
+							<td class="py-3 px-3">
+								<a href="/whisperx-diarized-json-to-srt/" class="text-sky-700 font-medium hover:underline">WhisperX diarized preset</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900"><code class="font-mono text-xs">whisper.cpp</code> CLI (<code class="font-mono text-xs">-oj</code> / <code class="font-mono text-xs">-ojf</code>)</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">transcription[]</code> with millisecond <code class="font-mono text-xs">offsets.from</code> / <code class="font-mono text-xs">to</code>, string <code class="font-mono text-xs">timestamps</code>, and <code class="font-mono text-xs">tokens[]</code>
+							</td>
+							<td class="py-3 px-3">
+								<a href="/whisper-cpp-json-to-srt/" class="text-sky-700 font-medium hover:underline">whisper.cpp preset</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">Deepgram Nova</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">results.channels[0].alternatives[0].words[]</code> with <code class="font-mono text-xs">punctuated_word</code> and numeric speaker IDs
+							</td>
+							<td class="py-3 px-3">
+								<a href="/" class="text-sky-700 font-medium hover:underline">Main converter</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">AssemblyAI Utterances</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">utterances[]</code> and <code class="font-mono text-xs">words[]</code> using integer millisecond <code class="font-mono text-xs">start</code> / <code class="font-mono text-xs">end</code> timestamps and speaker tags
+							</td>
+							<td class="py-3 px-3">
+								<a href="/whisper-json-to-vtt/" class="text-sky-700 font-medium hover:underline">WebVTT converter</a>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+				For vertical Reels, Shorts, and TikTok timelines, our <a href="/short-video-caption-splitter/" class="text-sky-700 font-medium hover:underline">Short Video Caption Splitter</a> configures a 16-character single-line ceiling out of the box.
+			</p>
+		</section>
+
+		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
+			<h2 class="text-xl font-bold text-slate-950">
+				Independent Non-Affiliation Notice and Contact
+			</h2>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				JSON to SRT (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code>) is an independent, clean-room software project released under the MIT License. It is not affiliated with, endorsed by, or sponsored by OpenAI, WhisperX authors, Georgi Gerganov (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">whisper.cpp</code>), Deepgram, Inc., or AssemblyAI, Inc. Third-party product and format names appear strictly to describe compatible input schemas.
+			</p>
+			<div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 sm:p-5 space-y-2">
+				<h3 class="text-sm font-semibold text-slate-950">Contact Maintainers</h3>
+				<p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+					For parser edge cases, schema compatibility requests, accessibility feedback, or partnership inquiries, email <a href="mailto:hello@jsontosrt.com" class="font-mono font-semibold text-sky-800 underline underline-offset-4 break-words">hello@jsontosrt.com</a>. When reporting a JSON dialect edge case, strip private dialogue text and share only a minimal structural sample. Review our <a href="/privacy/" class="text-sky-800 font-medium underline underline-offset-4">Privacy Policy</a> and <a href="/terms/" class="text-sky-800 font-medium underline underline-offset-4">Terms of Use</a> for full data handling and licensing details.
+				</p>
+			</div>
+		</section>
+	</article>
+</BaseLayout>

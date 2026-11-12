@@ -1,0 +1,38 @@
+{
+	"name": "whisper-json-to-srt",
+	"version": "0.1.0",
+	"license": "MIT",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"json-to-srt": "./bin/json-to-srt.mjs"
+	},
+	"scripts": {
+		"dev": "astro dev --host 127.0.0.1 --port 4325",
+		"build:cli": "node scripts/build-cli.mjs",
+		"build": "npm run build:cli && astro build",
+		"preview": "astro preview --host 127.0.0.1 --port 4325",
+		"cf:preview": "npm run build && wrangler dev",
+		"cf:deploy": "npm run build && wrangler deploy",
+		"test": "vitest run",
+		"seo:check": "node scripts/seo-preflight.mjs",
+		"test:e2e": "playwright test",
+		"verify:all": "npm test && npm run build && npm run seo:check && npm run test:e2e",
+		"ga4:report": "node ../../40_shared/scripts/ga4-report.mjs --project whisperjsontosrt --days 7 --no-write",
+		"gsc:report": "node ../../40_shared/scripts/gsc-report.mjs --project whisperjsontosrt --days 28 --no-write",
+		"bing:report": "node ../../40_shared/scripts/bing-report.mjs --project whisperjsontosrt --no-write"
+	},
+	"dependencies": {
+		"@astrojs/sitemap": "^3.7.0",
+		"@tailwindcss/vite": "^4.1.18",
+		"astro": "^5.4.0",
+		"tailwindcss": "^4.1.18"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.59.1",
+		"@types/node": "^22.15.3",
+		"typescript": "^5.8.3",
+		"vitest": "^3.1.2",
+		"wrangler": "^4.85.0"
+	}
+}

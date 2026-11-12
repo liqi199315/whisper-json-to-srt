@@ -1,0 +1,46 @@
+# JSON to SRT
+
+> Free, 100% browser-local subtitle converter that transforms OpenAI Whisper, WhisperX, whisper.cpp, Deepgram Nova, and AssemblyAI JSON transcripts into SRT, WebVTT, TXT, and CSV files with word-boundary line wrapping and zero server uploads.
+
+## Key Technical Facts
+
+- **Brand Name**: JSON to SRT
+- **Canonical Origin**: https://jsontosrt.com/
+- **Execution Model**: 100% client-side JavaScript in the local browser (`File.text()` + `Blob` download). Zero network file uploads, zero server transcript storage, and zero account wall.
+- **File Size Support**: No 2 MB paywall cap. Parses multi-megabyte (>5 MB) multi-hour JSON transcripts in milliseconds without blocking the browser tab.
+- **Supported Input Schemas (Auto-Detected)**:
+  1. **OpenAI Whisper `verbose_json`** (`/v1/audio/transcriptions` with `segments[]` and optional top-level or nested `words[]` in float seconds, plus Python `whisper` and `faster-whisper` JSON exports).
+  2. **WhisperX Diarized JSON** (`segments[]` and `words[]` with `pyannote.audio` speaker identifiers like `SPEAKER_00`, with safe timestamp interpolation for unaligned numeric and symbol tokens).
+  3. **`whisper.cpp` JSON** (`-oj` and `-ojf` outputs with `transcription[]`, integer millisecond `offsets.from` and `offsets.to`, `timestamps.from` and `timestamps.to`, and sub-word `tokens[]`).
+  4. **Deepgram Nova JSON** (`results.channels[0].alternatives[0].words[]` with `punctuated_word`, `start`, `end`, and optional integer `speaker` diarization).
+  5. **AssemblyAI JSON** (`utterances[]` and `words[]` using integer millisecond `start` and `end` timings and speaker strings).
+- **Supported Output Formats**:
+  - `.srt` (SubRip with 1-based cue indices and `HH:MM:SS,mmm --> HH:MM:SS,mmm` comma timestamps)
+  - `.vtt` (W3C WebVTT with `WEBVTT` header and `HH:MM:SS.mmm --> HH:MM:SS.mmm` dot timestamps)
+  - `.txt` (Plain-text transcript with optional speaker prefixes)
+  - `.csv` (Spreadsheet export with cue index, start, end, speaker, and text columns)
+- **Formatting Controls**:
+  - Max characters per line (`8` to `84`, default `42` for horizontal 16:9 video or `16` for vertical 9:16 video)
+  - Max lines per cue (`1` or `2`)
+  - Timestamp sync offset in milliseconds (positive or negative, clamped at `00:00:00,000`)
+  - Optional `[SPEAKER_XX]: ` prefix toggle with automatic cue breaks on speaker changes
+- **Affiliation Notice**: Independent utility; not affiliated with OpenAI, Deepgram, or AssemblyAI.
+
+## Converter Preset Routes
+
+- [JSON to SRT Converter](https://jsontosrt.com/): Default universal ASR JSON to 42-char, 2-line SRT converter.
+- [Whisper verbose_json to SRT](https://jsontosrt.com/whisper-verbose-json-to-srt/): Dedicated preset and schema reference for OpenAI Audio API `response_format="verbose_json"` payloads.
+- [OpenAI Whisper JSON to VTT](https://jsontosrt.com/whisper-json-to-vtt/): W3C WebVTT export preset with dot-millisecond timestamps for HTML5 `<video>` and `<track>` players.
+- [WhisperX Diarized JSON to SRT](https://jsontosrt.com/whisperx-diarized-json-to-srt/): Speaker-labeled SRT preset with `[SPEAKER_00]: ` prefixes enabled and turn-boundary cue splitting.
+- [whisper.cpp JSON to SRT Online](https://jsontosrt.com/whisper-cpp-json-to-srt/): Local parser preset for `whisper-cli -oj` and `-ojf` `transcription[]` offset payloads.
+- [Short Video Caption Splitter](https://jsontosrt.com/short-video-caption-splitter/): Vertical 9:16 Reels, TikTok, and YouTube Shorts preset configured to 16 max characters per line and 1 line per cue.
+
+## Trust, Privacy & Legal Pages
+
+- [About JSON to SRT](https://jsontosrt.com/about/): Architecture overview, supported speech-to-text JSON dialects, cue-wrapping algorithm notes, and verification standards.
+- [Privacy Policy](https://jsontosrt.com/privacy/): Browser-local zero-upload processing guarantee and sanitized anonymous usage telemetry policy.
+- [Terms of Use](https://jsontosrt.com/terms/): MIT-style usage terms, acceptable use, and independent trademark non-affiliation disclosures.
+
+## Sitemap
+
+- https://jsontosrt.com/sitemap-index.xml
