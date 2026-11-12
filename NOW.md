@@ -3,11 +3,11 @@
 ## 当前阶段（2026-11-12）
 
 - **项目路径**：`/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt/`
-- **正式生产域名**：`https://jsontosrt.com`（已完成正式产品仓结构迁入与上线前全部代码、E-E-A-T 信任页、移动端适配、GA4 隐私漏斗、独立 CLI、社交卡片与预检升级，等待站长按 `LAUNCH_CHECKLIST.md` 执行域名绑定与线上发布）
+- **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；线上首页与 6 种搜索爬虫请求返回 HTTP 200）
 - **联系邮箱规划**：`hello@jsontosrt.com`（Cloudflare Email Routing 转发）
 - **90 天试验窗口**：`2026-11-12` 至 `2027-02-10`（详见 `PLAN_90DAY.md`）
 - **主关键词**：`whisper json to srt converter`
-- **当前流量与转化基线**：`盲`（新站待绑定 `jsontosrt.com` 并完成 GSC / Bing / IndexNow / GA4 线上登记）
+- **当前流量与转化基线**：`盲`（新站已登记 GA4、Google Search Console 与 IndexNow，真实流量和转化尚未核验；Bing Webmaster Tools 待登记）
 
 ## 已就绪资产清单
 
@@ -28,17 +28,23 @@
 - **Playwright 端到端测试（`tests/e2e/converter.spec.ts`，共 6 条）**：覆盖首页 SRT -> VTT 切换、短视频 16 字单行切分断言、>2.5MB OpenAI `verbose_json` 上传与 `.srt` 下载、非法 JSON 报错与恢复、GA4 `window.dataLayer`（`config` 与 `subtitle_export` 含 `output_format`）且 `127.0.0.1` 以外外部请求数为 `0`、以及 `375x812` 移动端零横向溢出与页脚 `/privacy/`、`/about/` 跳转 HTTP 200 + 可见 `<h1>`。
 - **生产上线操作手册（`LAUNCH_CHECKLIST.md`）与发布物料包（`LAUNCH_KIT.md`）**：整理好站长复制即用的域名购买、Cloudflare Workers 部署（可用 `_ops/research/indie-site-workflow-20261112/tools/cf-zone-bootstrap.mjs` 自动化）、Email Routing、GSC/Bing/IndexNow 提交、GA4 数据流与 `40_shared/analytics-sites.yaml` 注册片段；`LAUNCH_KIT.md` 包含 X 25s 演示脚本、痛点搜索关键词与回复、HN Show 提示点、Reddit 角度与目录站文案。
 
-## 等待站长完成的清单（`[人工]`）
+## 上线状态与待办
 
-1. **P0-2（预估 25 分钟）**：按 `LAUNCH_CHECKLIST.md` 第 2 至 4 节注册 `jsontosrt.com`，执行 `npm run cf:deploy` 绑定自定义域名（可搭配 `cf-zone-bootstrap.mjs`），并开启 Cloudflare Email Routing 转发 `hello@jsontosrt.com`。
-2. **P0-3（预估 25 分钟）**：按 `LAUNCH_CHECKLIST.md` 第 5 至 6 节配置 Google Search Console、Bing Webmaster Tools、IndexNow 提交与 GA4 Web 数据流，将公开属性 ID 写入 `../../40_shared/analytics-sites.yaml` 的 `whisperjsontosrt` 条目并带 `PUBLIC_GA4_MEASUREMENT_ID` 重新部署。
+- `2026-11-12`：生产地址 `https://jsontosrt.com` 已绑定 Cloudflare Worker，版本 `1e1de410-8c17-4e72-8ead-b922a1cc0f61`。`www` 返回 301 至主域名。
+- GA4 属性 ID `564001579`，数据流 ID `16325797678`，衡量 ID `G-085WZLBQ8F`。已配置 14 个月保留、关闭站内搜索和表单交互增强衡量，并确认 `subtitle_export` 关键事件。
+- Google Search Console 域名属性 `sc-domain:jsontosrt.com` 已验证，服务账号和 `liqi199315@gmail.com` 均为所有者。站点地图 `https://jsontosrt.com/sitemap-index.xml` 提交返回 204，读取返回 200，Google 处理状态为待处理。
+- IndexNow 于 `2026-11-12` 接受 9 个网址，HTTP 202；接受提交不代表已收录。
+- `[人工]` P0-2 剩余：配置并实测 `hello@jsontosrt.com` Email Routing。
+- `[人工]` P0-3 剩余：配置 Bing Webmaster Tools；按授权范围以外的流程回填共享统计注册表。尚未执行 GA4 / GSC / Bing 报表连通性检查，P0-4 仍待办。
 
 ## 下一步第一动作
 
-- 站长 dake 打开 `LAUNCH_CHECKLIST.md`，依次执行 `P0-2`（`jsontosrt.com` 注册、Cloudflare 部署与 `hello@jsontosrt.com` 路由）和 `P0-3`（GSC / Bing / IndexNow / GA4 登记与公开 ID 回填）。
+- 完成邮箱转发和 Bing 登记，再按授权更新共享统计注册表并验证报表；等待 Google 处理站点地图。
 
 ## 行动记录
 
 - `2026-11-12` `[AI]`：完成 MVP `P0-1` 与 `P0-6`，跑通初始 6 路由静态构建、Vitest 18/18 单测与 Playwright 4 条基础转换路径。
 - `2026-11-12` `[AI]`：完成正式生产化升级并迁入 `30_products/whisper-json-to-srt/`，统一商标安全主域名 `https://jsontosrt.com`；新增 `/about/`、`/privacy/`、`/terms/` 三个 E-E-A-T 信任页；升级 `scripts/seo-preflight.mjs` 覆盖 9 路由 + 8 静态资产与 `og:image` 校验；在 `tests/e2e/converter.spec.ts` 新增 GA4 `window.dataLayer` 零外连断言与 `375x812` 移动端零溢出 + 信任页导航测试；编写 `LAUNCH_CHECKLIST.md` 全流程上线命令手册。
 - `2026-11-12` `[AI]`：完成站点加固 6 大项：通过 Playwright 栅格化生成 1200x630 og-image.png 与 1280x640 github-social-preview.png，BaseLayout.astro 切换 og:image 与 twitter:image；.gitignore 补充 .env 与 .dev.vars 秘钥防护；public/_headers 补充预览域名 noindex、X-Content-Type-Options、X-Frame-Options、HSTS 与 CSP/权限策略；生成双 IndexNow 文件 a8f4c2e91b7d40639e5a12c8d4f07b31.txt；构建 esbuild CLI bin/json-to-srt.mjs 并新增 tests/cli.test.ts（单测增至 29 项）；编写 LAUNCH_KIT.md 与升级 README.md；升级 scripts/seo-preflight.mjs 覆盖 20 项产物校验；verify:all 全流程（Vitest 29/29、astro build、seo:check、Playwright 6/6）全部退出码 0。
+
+- `2026-11-12` `[AI]`：执行生产上线，`npm run verify:all` 通过（29 项单测、6 项 Chromium E2E），上线预检和 SEO 检查均 `ok: true`；完成 GA4 配置、GSC 域名验证与站点地图提交、IndexNow 提交，并核验 6 种爬虫 HTTP 200、主域名 GA4 ID 和 www 301。

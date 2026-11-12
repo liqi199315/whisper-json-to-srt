@@ -10,6 +10,17 @@ Step-by-step copy-paste runbook for dake (`[人工]` tasks `P0-2` and `P0-3` in 
 
 ---
 
+## Live launch record (2026-11-12)
+
+- Production: `https://jsontosrt.com`, Worker `whisper-json-to-srt`, version `1e1de410-8c17-4e72-8ead-b922a1cc0f61`; `www` redirects to the canonical domain with HTTP 301.
+- GA4 property `564001579`, stream `16325797678`, measurement ID `G-085WZLBQ8F`. Retention is 14 months with reset enabled; site search and form interaction enhanced measurement are disabled; `subtitle_export` is a key event.
+- Google domain ownership verified for the service account and `liqi199315@gmail.com`; Search Console property `sc-domain:jsontosrt.com` registered. Sitemap submission returned HTTP 204 and readback returned HTTP 200 with processing pending.
+- IndexNow accepted 9 URLs with HTTP 202. Googlebot, AdsBot-Google, Bingbot, OAI-SearchBot, ChatGPT-User and PerplexityBot each received HTTP 200. Live HTML contains the measurement ID.
+- Local `verify:all` passed with 29 unit tests and 6 Chromium E2E tests; launch preflight and SEO check returned `ok: true`.
+- Still pending: Email Routing and delivery test, Bing Webmaster Tools registration, shared analytics registry update and reporting checks. Search engine submission does not establish indexing.
+
+---
+
 ## Step 1. Run local verification and refresh workspace inventory
 
 Run the full local gate and update `_ops/projects.yaml` / `_ops/projects.json` for `30_products/whisper-json-to-srt`:
