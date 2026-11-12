@@ -520,14 +520,23 @@ export function inspectDist(distDir, options = {}) {
 	const headersPath = path.join(distDir, '_headers');
 	if (isExistingFile(headersPath)) {
 		const headersText = readFileSync(headersPath, 'utf8');
-		if (!headersText.includes('X-Robots-Tag: noindex')) {
-			errors.push('dist/_headers: missing "X-Robots-Tag: noindex" rule for preview domains');
+		if (/^https?:\/\//m.test(headersText)) {
+			errors.push('dist/_headers: host-prefixed https:// rules are ignored by Workers Static Assets; use wrangler.jsonc workers_dev: false instead');
 		}
-		if (!headersText.includes('workers.dev')) {
-			errors.push('dist/_headers: missing workers.dev preview domain rule');
+		if (!headersText.includes('Content-Security-Policy:')) {
+			errors.push('dist/_headers: missing Content-Security-Policy header');
 		}
-		if (!headersText.includes('pages.dev')) {
-			errors.push('dist/_headers: missing pages.dev preview domain rule');
+		if (!headersText.includes('Strict-Transport-Security:')) {
+			errors.push('dist/_headers: missing Strict-Transport-Security header');
+		}
+	}
+
+	const wranglerPath = path.resolve(distDir, '..', 'wrangler.jsonc');
+	if (isExistingFile(wranglerPath)) {
+		const rawWrangler = readFileSync(wranglerPath, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+		const wranglerCfg = JSON.parse(rawWrangler);
+		if (wranglerCfg.workers_dev !== false || wranglerCfg.preview_urls !== false) {
+			errors.push('wrangler.jsonc: workers_dev and preview_urls must both be false once custom domain is active');
 		}
 	}
 

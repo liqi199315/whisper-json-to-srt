@@ -139,10 +139,10 @@
 | ID | 任务 | Owner | 状态 |
 |---|---|---|---|
 | P0-1 | 完成正式产品仓 `30_products/whisper-json-to-srt/` 9 路由静态站（6 工具页 + `/about/`、`/privacy/`、`/terms/`）、5 种 JSON 方言解析器、20 文件 `seo-preflight.mjs` 门禁、独立 Node ESM CLI、隐私安全 GA4 漏斗与 6 条 Playwright E2E（含 >2.5MB 下载、GA4 `dataLayer` 零外连与 `375x812` 移动端零横向溢出） | `[AI]` | `已完成（2026-11-12）` |
-| P0-2 | 购买商标安全域名 `jsontosrt.com` 接入 Cloudflare，按 `LAUNCH_CHECKLIST.md` 执行 `npm run cf:deploy` 绑定自定义域名，并启用 Cloudflare Email Routing 转发 `hello@jsontosrt.com`（预估耗时 25 分钟） | `[人工]` | `待办` |
-| P0-3 | 按 `LAUNCH_CHECKLIST.md` 配置 Google Search Console（`sc-domain:jsontosrt.com`）、Bing Webmaster Tools、IndexNow 提交与 GA4 Web 数据流，将公开 ID 写入 `../../40_shared/analytics-sites.yaml` 的 `whisperjsontosrt` 项并带 `PUBLIC_GA4_MEASUREMENT_ID` 重部署（预估耗时 25 分钟；只交公开 ID，不交密钥） | `[人工]` | `待办` |
-| P0-4 | 基于 `P0-3` 提供的公开统计配置，跑通 `npm run ga4:report`、`npm run gsc:report`、`npm run bing:report` 首轮连通性检查并记录新站零基线（依赖 P0-2、P0-3） | `[AI]` | `待办` |
-| P0-5 | 复核 9 个初始路由的 `<title>`、`<meta name="description">` 与 `<h1>` 关键词覆盖，上线后锁定 28 天观察窗口（至 2026-12-10 前不重复改标题） | `[协作]` | `待办` |
+| P0-2 | 购买商标安全域名 `jsontosrt.com` 接入 Cloudflare，按 `LAUNCH_CHECKLIST.md` 执行 `npm run cf:deploy` 绑定自定义域名，关闭 `workers_dev` 子域，并启用 Cloudflare Email Routing 转发 `hello@jsontosrt.com` 与 `privacy@jsontosrt.com` | `[协作]` | `已完成（2026-11-12）` |
+| P0-3 | 按 `LAUNCH_CHECKLIST.md` 配置 Google Search Console（`sc-domain:jsontosrt.com`）、Bing Webmaster Tools、IndexNow 提交与 GA4 Web 数据流（`564001579` / `G-085WZLBQ8F` + 自定义维度），写入 `../../40_shared/analytics-sites.yaml` 并重部署 | `[协作]` | `已完成（2026-11-12）` |
+| P0-4 | 基于 `P0-3` 提供的公开统计配置，跑通 `npm run ga4:report`、`npm run gsc:report`、`npm run bing:report` 首轮连通性检查并记录新站零基线（依赖 P0-2、P0-3） | `[AI]` | `已完成（2026-11-12）` |
+| P0-5 | 复核 9 个初始路由的 `<title>`、`<meta name="description">` 与 `<h1>` 关键词覆盖，上线后锁定 28 天观察窗口（至 2026-12-10 前不重复改标题） | `[AI]` | `已完成（2026-11-12）` |
 | P0-6 | 在 `NOW.md` 与 `LAUNCH_CHECKLIST.md` 记录进入 90 天试验模式、正式仓路径与首周等待人工清单 | `[AI]` | `已完成（2026-11-12）` |
 
 **Phase 0 验收**：本地 `npm run verify:all` 全绿；主假设一句话锁死；线上部署与搜索控制台提交完成（或未完成项已明确列在等待人工清单中）。
