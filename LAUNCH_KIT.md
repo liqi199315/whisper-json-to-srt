@@ -40,7 +40,7 @@ Web app (free, no sign-up, zero upload):
 https://jsontosrt.com
 
 GitHub repo + Node CLI:
-https://github.com/dake/whisper-json-to-srt
+https://github.com/liqi199315/whisper-json-to-srt
 
 ---
 
