@@ -16,14 +16,19 @@ Read these four files in order at the start of every session before you change c
 - **Workspace stage.** Formal production tool site in `30_products/whisper-json-to-srt/`.
 - **Tech stack.** Astro 5 (`output: 'static'`, `trailingSlash: 'always'`, `build.format: 'directory'`), Tailwind CSS v4, TypeScript (`astro/tsconfigs/strict`), Vitest, Playwright, esbuild for CLI bundling, and Cloudflare Workers Static Assets (`wrangler.jsonc`).
 - **Standalone CLI.** Bundled Node ESM CLI in `bin/json-to-srt.mjs` (built via `npm run build:cli`) wrapping `src/lib/subtitle-engine.ts` for headless automated pipelines.
-- **Nine content routes.**
-	- **Six converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
+- **Fourteen content routes.**
+	- **Eleven converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
 		- `/` (`dist/index.html`)
 		- `/whisper-verbose-json-to-srt/` (`dist/whisper-verbose-json-to-srt/index.html`)
 		- `/whisper-json-to-vtt/` (`dist/whisper-json-to-vtt/index.html`)
 		- `/whisperx-diarized-json-to-srt/` (`dist/whisperx-diarized-json-to-srt/index.html`)
 		- `/whisper-cpp-json-to-srt/` (`dist/whisper-cpp-json-to-srt/index.html`)
 		- `/short-video-caption-splitter/` (`dist/short-video-caption-splitter/index.html`)
+		- `/faster-whisper-srt/` (`dist/faster-whisper-srt/index.html`)
+		- `/premiere-pro-srt-import/` (`dist/premiere-pro-srt-import/index.html`)
+		- `/capcut-json-to-srt/` (`dist/capcut-json-to-srt/index.html`)
+		- `/gpt-4o-transcribe-diarize-srt/` (`dist/gpt-4o-transcribe-diarize-srt/index.html`)
+		- `/deepgram-json-to-srt/` (`dist/deepgram-json-to-srt/index.html`)
 	- **Three E-E-A-T trust routes** (require valid `Organization`, `BreadcrumbList`, or `WebApplication` JSON-LD):
 		- `/about/` (`dist/about/index.html`)
 		- `/privacy/` (`dist/privacy/index.html`)

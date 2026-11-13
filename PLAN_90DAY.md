@@ -154,6 +154,7 @@
 | P1-1 | 上线第 14 天拉取 GSC 与 Bing 收录状态，核查 6 个核心工具路由与 3 个信任页共 9 个路由是否全部入库（依赖 P0-4） | `[AI]` | `待办` |
 | P1-2 | 基于前 28 天真实搜索词报告，识别高曝光低点击查询词，针对性补充对应方言报错排查 FAQ 与真实字段对照表（每次改动 <= 2 页，遵守 28 天标题冻结期；依赖 P1-1） | `[AI]` | `待办` |
 | P1-3 | 根据 GSC 真实浮现的相邻语音转写 JSON 查询（仅限有真实曝光证据的方言，如 Deepgram Nova 或 AssemblyAI utterances 独立落地页），新增 1 至 2 个高意图工具子路由并通过 `verify:all`（依赖 P1-1） | `[协作]` | `待办` |
+| P1-4 | 按站长直接要求新增 5 个英文长尾工具页（faster-whisper SRT、Premiere generic error、CapCut 明文 draft JSON、gpt-4o-transcribe-diarize、Deepgram utterances），补上 CapCut 与 `diarized_json` 解析，并跑通 `verify:all`。不替代 P1-3，也不部署 | `[AI]` | `已完成（2026-11-13）` |
 | P1-D1 | 若站长选择启用社区首发：AI 起草面向 Whisper / 播客剪辑开发者的纯技术贴草稿（强调本地零上传与无 2MB 体积限制），站长用自有账号实名发布并回复评论，7 日后 AI 汇总引流与导出数据 | `[协作]` | `待办` |
 
 **Phase 1 验收（第 6 周末：2026-12-23）**：

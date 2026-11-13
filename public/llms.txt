@@ -12,8 +12,10 @@
   1. **OpenAI Whisper `verbose_json`** (`/v1/audio/transcriptions` with `segments[]` and optional top-level or nested `words[]` in float seconds, plus Python `whisper` and `faster-whisper` JSON exports).
   2. **WhisperX Diarized JSON** (`segments[]` and `words[]` with `pyannote.audio` speaker identifiers like `SPEAKER_00`, with safe timestamp interpolation for unaligned numeric and symbol tokens).
   3. **`whisper.cpp` JSON** (`-oj` and `-ojf` outputs with `transcription[]`, integer millisecond `offsets.from` and `offsets.to`, `timestamps.from` and `timestamps.to`, and sub-word `tokens[]`).
-  4. **Deepgram Nova JSON** (`results.channels[0].alternatives[0].words[]` with `punctuated_word`, `start`, `end`, and optional integer `speaker` diarization).
+  4. **Deepgram Nova JSON** (`results.utterances[]` with float-second `start`, `end`, `transcript`, integer `speaker`, and `words[].punctuated_word`, or `results.channels[0].alternatives[0].words[]` when utterances are absent).
   5. **AssemblyAI JSON** (`utterances[]` and `words[]` using integer millisecond `start` and `end` timings and speaker strings).
+  6. **OpenAI `diarized_json`** (`segments[]` with `speaker`, `text`, float-second `start` and `end`, and `id` values such as `seg_0` from `gpt-4o-transcribe-diarize`).
+  7. **Plain CapCut or Jianying draft JSON** (`materials.texts[].content` and `tracks[].segments[].target_timerange` in microseconds). CapCut and Jianying 6.0+ project files and template-based drafts are encrypted and are not supported.
 - **Supported Output Formats**:
   - `.srt` (SubRip with 1-based cue indices and `HH:MM:SS,mmm --> HH:MM:SS,mmm` comma timestamps)
   - `.vtt` (W3C WebVTT with `WEBVTT` header and `HH:MM:SS.mmm --> HH:MM:SS.mmm` dot timestamps)
@@ -34,6 +36,11 @@
 - [WhisperX Diarized JSON to SRT](https://jsontosrt.com/whisperx-diarized-json-to-srt/): Speaker-labeled SRT preset with `[SPEAKER_00]: ` prefixes enabled and turn-boundary cue splitting.
 - [whisper.cpp JSON to SRT Online](https://jsontosrt.com/whisper-cpp-json-to-srt/): Local parser preset for `whisper-cli -oj` and `-ojf` `transcription[]` offset payloads.
 - [Short Video Caption Splitter](https://jsontosrt.com/short-video-caption-splitter/): Vertical 9:16 Reels, TikTok, and YouTube Shorts preset configured to 16 max characters per line and 1 line per cue.
+- [faster-whisper JSON to SRT](https://jsontosrt.com/faster-whisper-srt/): Save faster-whisper `segments` and `words` as JSON, then reflow line breaks and CPS before SRT export.
+- [Premiere Pro SRT import fix](https://jsontosrt.com/premiere-pro-srt-import/): Rebuild a Premiere-safe SRT from transcript JSON with UTF-8, comma milliseconds, and one blank line between cues.
+- [CapCut JSON to SRT](https://jsontosrt.com/capcut-json-to-srt/): Read a plain-text `draft_content.json` or macOS `draft_info.json`. Encrypted 6.0+ and template drafts are refused.
+- [gpt-4o-transcribe-diarize SRT](https://jsontosrt.com/gpt-4o-transcribe-diarize-srt/): Convert `diarized_json` segments with `speaker`, `start`, and `end` into speaker-labeled SRT.
+- [Deepgram JSON to SRT](https://jsontosrt.com/deepgram-json-to-srt/): Export the existing Deepgram parser from a two-speaker `results.utterances` sample.
 
 ## Trust, Privacy & Legal Pages
 

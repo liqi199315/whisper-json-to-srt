@@ -1,7 +1,7 @@
 ---
 import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
-import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
-import type { CueFormatOptions, DialectId, OutputFormat, SubtitleCue, ToolRoutePreset } from '../lib/types';
+import { SAMPLE_ORDER, SAMPLE_PAYLOADS } from '../lib/sample-payloads';
+import type { CueFormatOptions, OutputFormat, SampleId, SubtitleCue, ToolRoutePreset } from '../lib/types';
 
 interface Props {
 	preset: ToolRoutePreset;
@@ -30,14 +30,6 @@ interface CueHealthSummary {
 }
 
 const { preset } = Astro.props;
-
-const DIALECT_IDS: DialectId[] = [
-	'openai-verbose-json',
-	'whisperx-diarized',
-	'whisper-cpp',
-	'deepgram-nova',
-	'assemblyai-utterances',
-];
 
 const FORMAT_OPTIONS: Array<{ id: OutputFormat; label: string }> = [
 	{ id: 'srt', label: 'SRT (.srt)' },
@@ -251,7 +243,7 @@ const initialHealth = initialResult.ok
 						class="min-h-11 sm:min-h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-600 focus:outline-none"
 					>
 						{
-							DIALECT_IDS.map((id) => (
+							SAMPLE_ORDER.map((id) => (
 								<option value={id} selected={id === preset.defaultSampleId}>
 									{SAMPLE_PAYLOADS[id].label}
 								</option>
@@ -475,7 +467,7 @@ const initialHealth = initialResult.ok
 				autocomplete="off"
 				autocorrect="off"
 				autocapitalize="off"
-				placeholder="Paste OpenAI Whisper verbose_json, WhisperX, whisper.cpp, Deepgram, or AssemblyAI JSON here..."
+				placeholder="Paste Whisper, diarized_json, whisper.cpp, Deepgram, AssemblyAI, or plain CapCut draft JSON here..."
 				class="w-full rounded-xl border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
 			>{initialJson}</textarea>
 		</div>
@@ -588,7 +580,7 @@ const initialHealth = initialResult.ok
 	import { trackToolEvent } from '../lib/analytics';
 	import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
 	import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
-	import type { CueFormatOptions, DialectId, OutputFormat, SubtitleCue } from '../lib/types';
+	import type { CueFormatOptions, OutputFormat, SampleId, SubtitleCue } from '../lib/types';
 
 	interface CueHealthSummary {
 		totalCues: number;
@@ -762,7 +754,7 @@ const initialHealth = initialResult.ok
 
 		let activeRawJson = jsonInput.value;
 		if (!activeRawJson.trim()) {
-			const sample = SAMPLE_PAYLOADS[sampleSelect.value as DialectId];
+			const sample = SAMPLE_PAYLOADS[sampleSelect.value as SampleId];
 			activeRawJson = sample.json;
 			jsonInput.value = activeRawJson;
 		}
@@ -983,7 +975,7 @@ const initialHealth = initialResult.ok
 		};
 
 		const loadSelectedSample = (): void => {
-			const dialect = sampleSelect.value as DialectId;
+			const dialect = sampleSelect.value as SampleId;
 			const sample = SAMPLE_PAYLOADS[dialect];
 			const sampleText = sample.json;
 			activeRawJson = sampleText;

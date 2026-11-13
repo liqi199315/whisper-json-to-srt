@@ -60,7 +60,7 @@ cat transcript.json | ./bin/json-to-srt.mjs -f srt > output.srt
 | `--help` | `-h` | Display usage instructions and web app link | |
 | `--version` | `-v` | Display version number | |
 
-## Built routes (9 content pages)
+## Built routes (14 content pages)
 
 | Route | Built file | Kind | Primary intent |
 |---|---|---|---|
@@ -70,6 +70,11 @@ cat transcript.json | ./bin/json-to-srt.mjs -f srt > output.srt
 | `/whisperx-diarized-json-to-srt/` | `dist/whisperx-diarized-json-to-srt/index.html` | Tool | WhisperX speaker-diarized JSON to SRT |
 | `/whisper-cpp-json-to-srt/` | `dist/whisper-cpp-json-to-srt/index.html` | Tool | `whisper.cpp` JSON output to SRT |
 | `/short-video-caption-splitter/` | `dist/short-video-caption-splitter/index.html` | Tool | Single-line 16-character short video caption splitting |
+| `/faster-whisper-srt/` | `dist/faster-whisper-srt/index.html` | Tool | faster-whisper `segments` / `words` JSON to SRT |
+| `/premiere-pro-srt-import/` | `dist/premiere-pro-srt-import/index.html` | Tool | Rebuild a Premiere-safe SRT from transcript JSON |
+| `/capcut-json-to-srt/` | `dist/capcut-json-to-srt/index.html` | Tool | Plain CapCut `draft_content.json` to SRT. Encrypted 6.0+ drafts are refused |
+| `/gpt-4o-transcribe-diarize-srt/` | `dist/gpt-4o-transcribe-diarize-srt/index.html` | Tool | OpenAI `diarized_json` speaker segments to SRT |
+| `/deepgram-json-to-srt/` | `dist/deepgram-json-to-srt/index.html` | Tool | Deepgram utterances JSON to speaker-labeled SRT |
 | `/about/` | `dist/about/index.html` | Trust | Browser-local architecture, SRT/WebVTT spec testing, ASR schemas, non-affiliation, `hello@jsontosrt.com` |
 | `/privacy/` | `dist/privacy/index.html` | Trust | Zero-upload RAM guarantee, anonymized GA4 events, cookie opt-out, GDPR/CCPA summary |
 | `/terms/` | `dist/terms/index.html` | Trust | MIT open tool terms, broadcast sync QC responsibility, `rel="sponsored"` disclosure policy |
@@ -94,8 +99,8 @@ npm run cf:preview
 - `npm run dev` starts the local Astro server at `http://127.0.0.1:4325`.
 - `npm test` runs the Vitest unit test suites (`tests/subtitle-engine.test.ts` and `tests/cli.test.ts`).
 - `npm run build` builds the Node CLI bundle and compiles the static site into `dist/`.
-- `npm run seo:check` runs `scripts/seo-preflight.mjs` against `dist/` to verify all required output files, raster social cards, dual IndexNow files, unique `<title>` and `<meta name="description">` across 9 routes, exact `<link rel="canonical">` (`https://jsontosrt.com/...`), `<meta property="og:image">`, single `<h1>`, `WebApplication` + `FAQPage` JSON-LD on the 6 tool routes, valid `Organization` / `BreadcrumbList` / `WebApplication` JSON-LD on the 3 trust routes, unbroken internal links, and zero placeholders or long dashes.
-- `npm run test:e2e` starts `npm run preview` on `http://127.0.0.1:4325/` and runs all 6 Chromium specs in `tests/e2e/converter.spec.ts` (4 converter journeys, GA4 `window.dataLayer` + zero external network requests, and `375x812` mobile viewport + footer trust navigation).
+- `npm run seo:check` runs `scripts/seo-preflight.mjs` against `dist/` to verify all required output files, raster social cards, dual IndexNow files, unique `<title>` and `<meta name="description">` across 14 routes, exact `<link rel="canonical">` (`https://jsontosrt.com/...`), `<meta property="og:image">`, single `<h1>`, `WebApplication` + `FAQPage` JSON-LD on the 11 tool routes, valid `Organization` / `BreadcrumbList` / `WebApplication` JSON-LD on the 3 trust routes, unbroken internal links, and zero placeholders or long dashes.
+- `npm run test:e2e` starts `npm run preview` on `http://127.0.0.1:4325/` and runs the Chromium specs in `tests/e2e/converter.spec.ts` (converter journeys, the five long-tail pages, GA4 `window.dataLayer` + zero external network requests, and `375x812` mobile viewport + footer trust navigation).
 - `npm run verify:all` runs unit tests, static build, SEO preflight, and Playwright E2E in sequence.
 
 ## Production launch runbook
