@@ -94,7 +94,7 @@ const webApplicationNode = {
 		priceCurrency: 'USD',
 	},
 	featureList: [
-		'Auto-detects OpenAI Whisper verbose_json, WhisperX diarized, whisper.cpp, Deepgram Nova, and AssemblyAI JSON formats',
+		'Auto-detects OpenAI Whisper verbose_json, OpenAI diarized_json, WhisperX, whisper.cpp, Deepgram, AssemblyAI, and plain CapCut draft JSON',
 		'Exports SubRip (.srt), WebVTT (.vtt), plain text (.txt), and CSV (.csv) subtitle files',
 		'Configurable max characters per line (8 to 84) and max lines per cue (1 or 2)',
 		'Millisecond timestamp offset shift and optional [SPEAKER_XX] diarization labels',
@@ -440,7 +440,7 @@ const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim(
 								<div>
 									<dt class="font-semibold text-slate-900">Supported ASR JSON</dt>
 									<dd class="text-slate-600 mt-0.5">
-										OpenAI verbose_json, WhisperX, whisper.cpp, Deepgram, AssemblyAI
+										Whisper, diarized_json, whisper.cpp, Deepgram, AssemblyAI, plain CapCut drafts
 									</dd>
 								</div>
 								<div>
@@ -527,7 +527,7 @@ const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim(
 									<tr>
 										<th scope="row" class="py-3 pr-4 font-medium text-slate-900">ASR dialect coverage</th>
 										<td class="py-3 px-4 text-slate-800 bg-emerald-50/30">
-											Auto-detects OpenAI verbose_json, WhisperX, whisper.cpp, Deepgram, AssemblyAI
+											Whisper, diarized_json, whisper.cpp, Deepgram, AssemblyAI, and plain CapCut drafts
 										</td>
 										<td class="py-3 pl-4 text-slate-600">
 											Breaks when segments[] is missing or timestamps use integer milliseconds

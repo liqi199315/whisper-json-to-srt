@@ -46,6 +46,36 @@ const ROUTE_DEFINITIONS = [
 		requiredAllSchemas: ['WebApplication', 'FAQPage'],
 	},
 	{
+		route: '/faster-whisper-srt/',
+		file: 'faster-whisper-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/premiere-pro-srt-import/',
+		file: 'premiere-pro-srt-import/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/capcut-json-to-srt/',
+		file: 'capcut-json-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/gpt-4o-transcribe-diarize-srt/',
+		file: 'gpt-4o-transcribe-diarize-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/deepgram-json-to-srt/',
+		file: 'deepgram-json-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
 		route: '/about/',
 		file: 'about/index.html',
 		kind: 'trust',

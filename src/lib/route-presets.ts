@@ -1,4 +1,5 @@
 import type { ToolRoutePreset } from './types';
+import { LONG_TAIL_PRESETS, LONG_TAIL_WORKFLOW_CARDS } from './long-tail-presets';
 
 export interface WorkflowLinkCard {
 	slug: string;
@@ -35,7 +36,7 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 			'Convert OpenAI Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON transcripts to SRT, VTT, TXT, or CSV in your browser with zero file uploads.',
 		primaryKeyword: 'whisper json to srt converter',
 		heroSummary:
-			'Paste or drop any ASR JSON transcript to generate broadcast-safe SRT, WebVTT, plain text, or CSV cues right in your browser tab. Auto-detects five speech-to-text schemas with word-boundary line wrapping, live CPS reading-speed checks, and no 2 MB cloud upload cap.',
+			'Paste or drop any ASR JSON transcript to generate broadcast-safe SRT, WebVTT, plain text, or CSV cues right in your browser tab. Auto-detects Whisper-family JSON, Deepgram, AssemblyAI, OpenAI diarized_json, and plain CapCut drafts with word-boundary line wrapping, live CPS checks, and no 2 MB cloud upload cap.',
 		defaultSampleId: 'openai-verbose-json',
 		defaultOptions: {
 			format: 'srt',
@@ -47,7 +48,7 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 			includeSpeakerPrefix: false,
 		},
 		schemaNotes: [
-			'Auto-detects five JSON transcript layouts by inspecting top-level keys including segments[] and words[] for OpenAI Whisper, speaker-annotated segments[] for WhisperX, transcription[] with offsets for whisper.cpp, results.channels[0].alternatives[0].words[] for Deepgram Nova, and millisecond utterances[] or words[] for AssemblyAI.',
+			'Auto-detects JSON layouts by inspecting top-level keys: segments[] and words[] for OpenAI Whisper and faster-whisper, diarized_json segments with seg_ ids, speaker-annotated segments[] for WhisperX, transcription[] offsets for whisper.cpp, Deepgram channels or utterances, AssemblyAI millisecond utterances, and plain CapCut materials.texts plus tracks.',
 			'Formats SubRip cues using sequential 1-based indices, comma-separated HH:MM:SS,mmm timestamps, and blank-line separators compatible with Premiere Pro, DaVinci Resolve, Final Cut Pro, CapCut, and FFmpeg.',
 			'Wraps long transcript segments greedily on word boundaries up to 42 characters per line and 2 lines per cue, splitting cues earlier when speech pauses exceed 0.6 seconds or cue duration reaches 6 seconds.',
 			'Reads uploaded .json files directly through the browser File.text() API so multi-megabyte hour-long podcast and lecture transcripts convert in milliseconds without leaving your device.',
@@ -56,7 +57,7 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 			{
 				question: 'Which Whisper and ASR JSON dialects does this converter accept?',
 				answer:
-					'The parser accepts OpenAI Whisper verbose_json responses, faster-whisper and Whisper CLI JSON exports, WhisperX diarized JSON with speaker IDs, whisper.cpp -oj and -ojf output files, Deepgram Nova word-array responses, and AssemblyAI utterance or word transcripts.',
+					'The parser accepts OpenAI Whisper verbose_json, faster-whisper segment JSON, OpenAI diarized_json, WhisperX speaker JSON, whisper.cpp -oj and -ojf files, Deepgram word or utterance responses, AssemblyAI transcripts, and plain-text CapCut or Jianying drafts. Encrypted CapCut 6.0+ project files are refused.',
 			},
 			{
 				question: 'Are my transcript JSON files uploaded to an external server?',
@@ -161,7 +162,7 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 			{
 				question: 'Can I also convert WhisperX or Deepgram JSON to WebVTT on this page?',
 				answer:
-					'Yes. Although this preset defaults to WebVTT output with an OpenAI Whisper sample, the input box and file uploader accept all five supported ASR JSON dialects and export any of them as .vtt.',
+					'Yes. Although this preset defaults to WebVTT output with an OpenAI Whisper sample, the input box and file uploader accept every supported JSON dialect, including diarized_json and plain CapCut drafts, and export any of them as .vtt.',
 			},
 		],
 	},
@@ -300,17 +301,18 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 			},
 		],
 	},
+	...LONG_TAIL_PRESETS,
 ];
 
 export const WORKFLOW_LINK_CARDS: WorkflowLinkCard[] = [
 	{
 		slug: '',
 		path: '/',
-		badge: 'All 5 ASR Dialects',
+		badge: 'All ASR dialects',
 		anchorText: 'Whisper & Multi-ASR JSON to SRT Master Converter',
 		presetConfig: '.srt | 42 chars x 2 lines',
 		summary:
-			'Universal local workbench that auto-detects OpenAI Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON.',
+			'Universal local workbench for Whisper, diarized_json, whisper.cpp, Deepgram, AssemblyAI, and plain CapCut drafts.',
 	},
 	{
 		slug: 'whisper-verbose-json-to-srt',
@@ -357,6 +359,7 @@ export const WORKFLOW_LINK_CARDS: WorkflowLinkCard[] = [
 		summary:
 			'Splits word-level Whisper JSON into punchy single-line captions for TikTok, Instagram Reels, and YouTube Shorts.',
 	},
+	...LONG_TAIL_WORKFLOW_CARDS,
 ];
 
 export const HOW_IT_WORKS_STEPS: HowItWorksStep[] = [
@@ -364,7 +367,7 @@ export const HOW_IT_WORKS_STEPS: HowItWorksStep[] = [
 		step: '01',
 		title: 'Paste or Drop Local ASR JSON',
 		detail:
-			'Drop a .json file onto the highlighted upload box, paste raw API output, or pick one of five built-in ASR dialect samples. Multi-megabyte multi-hour files parse in local browser RAM with zero server upload.',
+			'Drop a .json file onto the highlighted upload box, paste raw API output, or pick a built-in ASR sample. Multi-megabyte multi-hour files parse in local browser RAM with zero server upload.',
 	},
 	{
 		step: '02',
@@ -419,7 +422,7 @@ export const FORMAT_FIELD_CARDS: FormatFieldCard[] = [
 			'words[].punctuated_word',
 		],
 		behaviorNote:
-			'Prefers punctuated_word capitalization and maps integer speaker indices into clean Speaker N prefixes.',
+			'Prefers utterances when present, then punctuated_word capitalization, and maps integer speaker indices into Speaker N prefixes.',
 	},
 	{
 		id: 'assemblyai',
@@ -438,6 +441,24 @@ export const FORMAT_FIELD_CARDS: FormatFieldCard[] = [
 		keyPaths: ['SRT: HH:MM:SS,mmm', 'VTT: WEBVTT + HH:MM:SS.mmm', 'CSV: index,start,end,speaker,text'],
 		behaviorNote:
 			'Clamps negative sync offsets safely at 00:00:00,000 and guarantees minimum 50 ms cue duration for NLE timelines.',
+	},
+	{
+		id: 'openai-diarized',
+		title: 'OpenAI diarized_json',
+		tag: 'gpt-4o-transcribe-diarize',
+		timingUnit: 'Float seconds (0.42)',
+		keyPaths: ['segments[].speaker', 'segments[].start / end / text', 'segments[].id = seg_0'],
+		behaviorNote:
+			'Labels files with seg_ ids or transcript.text.segment as diarized_json. No word array, so long lines split by character count.',
+	},
+	{
+		id: 'capcut-draft',
+		title: 'CapCut / Jianying plain draft',
+		tag: 'draft_content.json',
+		timingUnit: 'Microseconds (200000)',
+		keyPaths: ['materials.texts[].content', 'segments[].material_id', 'target_timerange.start / duration'],
+		behaviorNote:
+			'Reads plain JSON drafts only. CapCut and Jianying 6.0+ files and template-based drafts are encrypted and refused.',
 	},
 ];
 

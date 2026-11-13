@@ -6,10 +6,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 // src/lib/subtitle-engine.ts
 var DIALECT_LABELS = {
   "openai-verbose-json": "OpenAI Whisper verbose_json",
+  "openai-diarized-json": "OpenAI diarized_json",
   "whisperx-diarized": "WhisperX Diarized JSON",
   "whisper-cpp": "whisper.cpp JSON",
   "deepgram-nova": "Deepgram Nova JSON",
-  "assemblyai-utterances": "AssemblyAI Utterances JSON"
+  "assemblyai-utterances": "AssemblyAI Utterances JSON",
+  "capcut-draft": "CapCut draft JSON"
 };
 var CJK_CHAR_RE = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef\uac00-\ud7af]/;
 var CJK_CLOSING_PUNCT_RE = /^[，。！？；：、）》」』】〉》]/;
@@ -469,6 +471,89 @@ function extractAssemblyAiSegments(root) {
     segments: groupWordsIntoSpeakerSegments(topWords)
   };
 }
+function readCapCutCaptionText(content) {
+  if (isRecord(content) && typeof content.text === "string") {
+    return content.text.replace(/\s+/g, " ").trim();
+  }
+  if (typeof content !== "string") return "";
+  const trimmed = content.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (isRecord(parsed) && typeof parsed.text === "string") {
+        return parsed.text.replace(/\s+/g, " ").trim();
+      }
+    } catch {
+    }
+  }
+  return trimmed.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+function extractCapCutDraftSegments(root) {
+  const materials = isRecord(root.materials) ? root.materials : {};
+  const texts = Array.isArray(materials.texts) ? materials.texts : [];
+  const textById = /* @__PURE__ */ new Map();
+  for (const item of texts) {
+    if (!isRecord(item) || typeof item.id !== "string" || item.id.length === 0) continue;
+    const text = readCapCutCaptionText(item.content);
+    if (!text) continue;
+    textById.set(item.id, text);
+  }
+  const tracks = Array.isArray(root.tracks) ? root.tracks : [];
+  const segments = [];
+  for (const track of tracks) {
+    if (!isRecord(track) || !Array.isArray(track.segments)) continue;
+    for (const segment of track.segments) {
+      if (!isRecord(segment) || typeof segment.material_id !== "string") continue;
+      const text = textById.get(segment.material_id);
+      if (!text) continue;
+      const range = isRecord(segment.target_timerange) ? segment.target_timerange : null;
+      const startUs = range ? toFiniteNumber(range.start) : null;
+      const durationUs = range ? toFiniteNumber(range.duration) : null;
+      if (startUs === null || durationUs === null || durationUs < 0) continue;
+      const startSec = roundMicro(Math.max(0, startUs / 1e6));
+      const endSec = roundMicro(Math.max(startSec, (startUs + durationUs) / 1e6));
+      segments.push({ startSec, endSec, text });
+    }
+  }
+  segments.sort((a, b) => a.startSec - b.startSec || a.endSec - b.endSec);
+  return { segments };
+}
+function isOpenAiDiarizedJson(root) {
+  if (!Array.isArray(root.segments) || root.segments.length === 0) return false;
+  let speakerSegments = 0;
+  let diarizedMarkers = 0;
+  let nestedWordLists = 0;
+  for (const item of root.segments) {
+    if (!isRecord(item)) continue;
+    if (Array.isArray(item.words) && item.words.length > 0) nestedWordLists += 1;
+    const start = toFiniteNumber(item.start);
+    const end = toFiniteNumber(item.end);
+    const text = typeof item.text === "string" ? item.text.trim() : "";
+    const speaker = typeof item.speaker === "string" ? item.speaker.trim() : "";
+    if (start !== null && end !== null && text && speaker) speakerSegments += 1;
+    if (typeof item.id === "string" && /^seg_\d+$/.test(item.id)) diarizedMarkers += 1;
+    if (item.type === "transcript.text.segment") diarizedMarkers += 1;
+  }
+  return nestedWordLists === 0 && speakerSegments > 0 && diarizedMarkers > 0;
+}
+function looksLikeEncryptedProjectFile(raw) {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return false;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return false;
+  if (/[\r\n]/.test(trimmed)) return false;
+  if (/\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}/.test(trimmed)) return false;
+  let controlChars = 0;
+  for (const char of trimmed) {
+    const code = char.charCodeAt(0);
+    if (code === 9 || code === 32) return false;
+    if (code < 32) controlChars += 1;
+  }
+  if (controlChars > 0) return true;
+  return trimmed.length >= 80 && /^[A-Za-z0-9+/_=-]+$/.test(trimmed);
+}
+var ENCRYPTED_DRAFT_ERROR = "This file is not readable JSON. CapCut and Jianying 6.0+ project files, and template-based drafts, are encrypted and cannot be converted. Copy a plain-text draft_content.json (Windows) or draft_info.json (macOS) from a non-template project.";
+var EMPTY_CAPCUT_ERROR = "Detected a CapCut or Jianying draft, but no readable caption text was placed on the timeline. CapCut and Jianying 6.0+ project files and template-based drafts are encrypted and cannot be read. Use a plain-text draft_content.json or draft_info.json.";
 var DIALECT_ADAPTERS = [
   {
     id: "whisper-cpp",
@@ -487,6 +572,18 @@ var DIALECT_ADAPTERS = [
     label: DIALECT_LABELS["assemblyai-utterances"],
     matches: (root) => Array.isArray(root.utterances) || !Array.isArray(root.segments) && Array.isArray(root.words) && isAssemblyAiWordsPayload(root, root.words),
     extract: extractAssemblyAiSegments
+  },
+  {
+    id: "capcut-draft",
+    label: DIALECT_LABELS["capcut-draft"],
+    matches: (root) => isRecord(root.materials) && Array.isArray(root.materials.texts) && Array.isArray(root.tracks),
+    extract: extractCapCutDraftSegments
+  },
+  {
+    id: "openai-diarized-json",
+    label: DIALECT_LABELS["openai-diarized-json"],
+    matches: isOpenAiDiarizedJson,
+    extract: extractWhisperStyleSegments
   },
   {
     id: "whisperx-diarized",
@@ -520,10 +617,17 @@ function parseAsrJson(rawJsonText) {
       error: "Empty input. Paste or upload a JSON transcript payload to convert."
     };
   }
+  const normalizedJsonText = rawJsonText.replace(/^\uFEFF/, "");
   let parsedJson;
   try {
-    parsedJson = JSON.parse(rawJsonText);
+    parsedJson = JSON.parse(normalizedJsonText);
   } catch (err) {
+    if (looksLikeEncryptedProjectFile(normalizedJsonText)) {
+      return {
+        ok: false,
+        error: ENCRYPTED_DRAFT_ERROR
+      };
+    }
     const detail = err instanceof Error ? err.message : "unexpected token";
     return {
       ok: false,
@@ -540,14 +644,14 @@ function parseAsrJson(rawJsonText) {
   if (!adapter) {
     return {
       ok: false,
-      error: "Unrecognized ASR JSON dialect. Supported formats: OpenAI Whisper verbose_json, WhisperX diarized, whisper.cpp, Deepgram Nova, and AssemblyAI utterances/words."
+      error: "Unrecognized ASR JSON dialect. Supported formats: OpenAI Whisper verbose_json, OpenAI diarized_json, WhisperX diarized, whisper.cpp, Deepgram Nova, AssemblyAI utterances/words, and plain CapCut draft_content.json."
     };
   }
   const { segments, durationHintSec } = adapter.extract(parsedJson);
   if (segments.length === 0) {
     return {
       ok: false,
-      error: `Detected ${adapter.label}, but found no timed transcript segments or words.`
+      error: adapter.id === "capcut-draft" ? EMPTY_CAPCUT_ERROR : `Detected ${adapter.label}, but found no timed transcript segments or words.`
     };
   }
   const speakerSet = /* @__PURE__ */ new Set();

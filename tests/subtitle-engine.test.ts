@@ -7,7 +7,7 @@ import {
 	reflowCues,
 	serializeCues,
 } from '../src/lib/subtitle-engine';
-import type { CueFormatOptions, DialectId, SubtitleCue } from '../src/lib/types';
+import type { CueFormatOptions, DialectId, SampleId, SubtitleCue } from '../src/lib/types';
 
 const BASE_OPTIONS: CueFormatOptions = {
 	format: 'srt',
@@ -34,14 +34,16 @@ describe('formatTimestamp', () => {
 	});
 });
 
-describe('parseAsrJson across all 5 ASR dialects', () => {
-	it('parses all 5 built-in sample payloads with matching dialect IDs and valid cues', () => {
+describe('parseAsrJson across ASR dialects', () => {
+	it('parses built-in dialect samples with matching dialect IDs and valid cues', () => {
 		const dialectIds: DialectId[] = [
 			'openai-verbose-json',
+			'openai-diarized-json',
 			'whisperx-diarized',
 			'whisper-cpp',
 			'deepgram-nova',
 			'assemblyai-utterances',
+			'capcut-draft',
 		];
 
 		for (const id of dialectIds) {
@@ -411,6 +413,191 @@ describe('reflowCues timing, TikTok 16-char mode, and proportional fallback', ()
 			for (const cue of enCues) {
 				expect(cue.lines[0]!.length).toBeLessThanOrEqual(20);
 			}
+		}
+	});
+});
+
+function assertPremiereSafeSrt(srt: string): void {
+	expect(srt.charCodeAt(0)).not.toBe(0xfeff);
+	expect(Buffer.from(srt, 'utf8').subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))).toBe(
+		false,
+	);
+	expect(srt.includes('\r')).toBe(false);
+	expect(srt.includes('\n\n\n')).toBe(false);
+	const blocks = srt.split('\n\n').filter((block) => block.length > 0);
+	expect(blocks.length).toBeGreaterThan(1);
+	for (const block of blocks) {
+		const lines = block.split('\n');
+		expect(lines[1]).toMatch(/^\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}$/);
+	}
+}
+
+describe('faster-whisper, Premiere SRT, CapCut, diarized_json, and Deepgram utterances', () => {
+	it('reads faster-whisper segments and words with the Whisper parser', () => {
+		const parsed = parseAsrJson(SAMPLE_PAYLOADS['faster-whisper-json'].json);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.dialect).toBe('openai-verbose-json');
+		expect(parsed.wordTimingAvailable).toBe(true);
+		expect(parsed.segments[0]?.words?.[0]?.word).toBe('faster-whisper');
+		expect(parsed.segments[0]?.words?.some((word) => word.word === 'timings,')).toBe(true);
+
+		const converted = convertAsrJson(SAMPLE_PAYLOADS['faster-whisper-json'].json, BASE_OPTIONS);
+		expect(converted.ok).toBe(true);
+		if (!converted.ok) return;
+		assertPremiereSafeSrt(converted.output);
+		expect(converted.output).toContain('faster-whisper returns segments');
+	});
+
+	it('exports Premiere-safe SRT from JSON: UTF-8, comma milliseconds, one blank line', () => {
+		const converted = convertAsrJson(SAMPLE_PAYLOADS['premiere-source-json'].json, BASE_OPTIONS);
+		expect(converted.ok).toBe(true);
+		if (!converted.ok) return;
+		assertPremiereSafeSrt(converted.output);
+		expect(converted.output).toContain('José');
+		expect(converted.output).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d{3}/);
+	});
+
+	it('strips a leading BOM from otherwise valid JSON and still emits SRT without one', () => {
+		const converted = convertAsrJson(
+			`\uFEFF${SAMPLE_PAYLOADS['premiere-source-json'].json}`,
+			BASE_OPTIONS,
+		);
+		expect(converted.ok).toBe(true);
+		if (!converted.ok) return;
+		assertPremiereSafeSrt(converted.output);
+	});
+
+	it('reads CapCut microsecond ranges and skips text that is not on the timeline', () => {
+		const parsed = parseAsrJson(SAMPLE_PAYLOADS['capcut-draft'].json);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.dialect).toBe('capcut-draft');
+		expect(parsed.segments.map((segment) => segment.text)).toEqual([
+			'Plain CapCut drafts keep caption text.',
+			'Timeline ranges use microseconds.',
+			'Encrypted 6.0 drafts cannot be read.',
+		]);
+		expect(parsed.segments[0]?.startSec).toBeCloseTo(0.2, 5);
+		expect(parsed.segments[0]?.endSec).toBeCloseTo(3, 5);
+		expect(parsed.segments.some((segment) => segment.text.includes('not on a track'))).toBe(
+			false,
+		);
+
+		const converted = convertAsrJson(SAMPLE_PAYLOADS['capcut-draft'].json, BASE_OPTIONS);
+		expect(converted.ok).toBe(true);
+		if (!converted.ok) return;
+		assertPremiereSafeSrt(converted.output);
+		expect(converted.output).not.toContain('not on a track');
+		expect(converted.output).toContain('00:00:00,200 --> 00:00:03,000');
+	});
+
+	it('keeps ordinary non-JSON text on the generic syntax error', () => {
+		const srt = `1
+00:00:00,360 --> 00:00:04,420
+Jose checked the SRT after Premiere reported a generic import error.
+
+2
+00:00:05,080 --> 00:00:09,200
+Comma milliseconds and no byte-order mark let the caption track load.
+`;
+		expect(srt.trim().length).toBeGreaterThan(80);
+		const pastedSrt = parseAsrJson(srt);
+		expect(pastedSrt.ok).toBe(false);
+		if (!pastedSrt.ok) {
+			expect(pastedSrt.error).toMatch(/invalid json syntax/i);
+			expect(pastedSrt.error).not.toMatch(/encrypted/i);
+		}
+
+		const chinese = parseAsrJson('中文测试');
+		expect(chinese.ok).toBe(false);
+		if (!chinese.ok) {
+			expect(chinese.error).toMatch(/invalid json syntax/i);
+			expect(chinese.error).not.toMatch(/encrypted/i);
+		}
+	});
+
+	it('refuses encrypted or non-JSON project blobs and empty CapCut drafts', () => {
+		const encrypted = parseAsrJson('A'.repeat(120));
+		expect(encrypted.ok).toBe(false);
+		if (!encrypted.ok) expect(encrypted.error).toMatch(/encrypted/i);
+
+		const binary = parseAsrJson('\u0000\u0001not-json-draft');
+		expect(binary.ok).toBe(false);
+		if (!binary.ok) expect(binary.error).toMatch(/encrypted/i);
+
+		const emptyDraft = parseAsrJson(
+			JSON.stringify({ materials: { texts: [] }, tracks: [{ type: 'text', segments: [] }] }),
+		);
+		expect(emptyDraft.ok).toBe(false);
+		if (!emptyDraft.ok) expect(emptyDraft.error).toMatch(/encrypted|no readable caption/i);
+	});
+
+	it('recognizes OpenAI diarized_json speaker segments and still converts speaker segments without seg_ ids', () => {
+		const parsed = parseAsrJson(SAMPLE_PAYLOADS['openai-diarized-json'].json);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.dialect).toBe('openai-diarized-json');
+		expect(parsed.wordTimingAvailable).toBe(false);
+		expect(parsed.speakerLabels).toEqual(['agent', 'caller']);
+
+		const converted = convertAsrJson(SAMPLE_PAYLOADS['openai-diarized-json'].json, {
+			...BASE_OPTIONS,
+			includeSpeakerPrefix: true,
+		});
+		expect(converted.ok).toBe(true);
+		if (converted.ok) {
+			assertPremiereSafeSrt(converted.output);
+			expect(converted.output).toContain('[agent]');
+			expect(converted.output).toContain('[caller]');
+		}
+
+		const unlabeled = parseAsrJson(
+			JSON.stringify({
+				segments: [
+					{ speaker: 'agent', text: 'Hello from the desk.', start: 0.2, end: 1.8 },
+					{ speaker: 'caller', text: 'Hello back.', start: 2.1, end: 3.4 },
+				],
+			}),
+		);
+		expect(unlabeled.ok).toBe(true);
+		if (unlabeled.ok) expect(unlabeled.dialect).toBe('whisperx-diarized');
+
+		const textOnly = parseAsrJson(JSON.stringify({ text: 'No timestamps here.' }));
+		expect(textOnly.ok).toBe(false);
+	});
+
+	it('prefers Deepgram utterances and speaker labels over a conflicting channel word', () => {
+		const parsed = parseAsrJson(SAMPLE_PAYLOADS['deepgram-utterances'].json);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.dialect).toBe('deepgram-nova');
+		expect(parsed.speakerLabels).toEqual(['Speaker 0', 'Speaker 1']);
+		expect(parsed.segments[0]?.text).toBe('Deepgram utterances group one speaker turn.');
+		expect(parsed.segments.some((segment) => segment.text.includes('Ignored'))).toBe(false);
+
+		const converted = convertAsrJson(SAMPLE_PAYLOADS['deepgram-utterances'].json, {
+			...BASE_OPTIONS,
+			includeSpeakerPrefix: true,
+		});
+		expect(converted.ok).toBe(true);
+		if (!converted.ok) return;
+		assertPremiereSafeSrt(converted.output);
+		expect(converted.output).toContain('[Speaker 0]');
+		expect(converted.output).toContain('[Speaker 1]');
+		expect(converted.output).not.toContain('Ignored');
+	});
+
+	it('maps the extra page samples onto existing dialects', () => {
+		const cases: Array<{ id: SampleId; dialect: DialectId }> = [
+			{ id: 'faster-whisper-json', dialect: 'openai-verbose-json' },
+			{ id: 'premiere-source-json', dialect: 'openai-verbose-json' },
+			{ id: 'deepgram-utterances', dialect: 'deepgram-nova' },
+		];
+		for (const item of cases) {
+			const parsed = parseAsrJson(SAMPLE_PAYLOADS[item.id].json);
+			expect(parsed.ok).toBe(true);
+			if (parsed.ok) expect(parsed.dialect).toBe(item.dialect);
 		}
 	});
 });

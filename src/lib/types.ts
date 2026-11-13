@@ -1,9 +1,17 @@
 export type DialectId =
 	| 'openai-verbose-json'
+	| 'openai-diarized-json'
 	| 'whisperx-diarized'
 	| 'whisper-cpp'
 	| 'deepgram-nova'
-	| 'assemblyai-utterances';
+	| 'assemblyai-utterances'
+	| 'capcut-draft';
+
+export type SampleId =
+	| DialectId
+	| 'faster-whisper-json'
+	| 'premiere-source-json'
+	| 'deepgram-utterances';
 
 export type OutputFormat = 'srt' | 'vtt' | 'txt' | 'csv';
 
@@ -60,6 +68,19 @@ export interface RouteFaqItem {
 	answer: string;
 }
 
+export interface RouteGuideSection {
+	id: string;
+	kicker: string;
+	heading: string;
+	paragraphs: string[];
+	bullets?: string[];
+	code?: {
+		label: string;
+		source: string;
+	};
+	links?: Array<{ href: string; label: string }>;
+}
+
 export interface ToolRoutePreset {
 	slug: string;
 	path: string;
@@ -69,8 +90,9 @@ export interface ToolRoutePreset {
 	metaDescription: string;
 	primaryKeyword: string;
 	heroSummary: string;
-	defaultSampleId: DialectId;
+	defaultSampleId: SampleId;
 	defaultOptions: CueFormatOptions;
 	schemaNotes: string[];
 	faqs: RouteFaqItem[];
+	guides?: RouteGuideSection[];
 }

@@ -142,7 +142,7 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 				Supported ASR Engines and JSON Schemas
 			</h2>
 			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
-				The parser automatically inspects top-level keys and normalizes five widely used speech recognition JSON formats into a unified cue timeline:
+				The parser automatically inspects top-level keys and normalizes the speech recognition JSON formats below into a unified cue timeline:
 			</p>
 			<div class="overflow-x-auto rounded-xl border border-slate-200">
 				<table class="w-full text-left border-collapse text-xs sm:text-sm">
@@ -184,10 +184,28 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 						<tr>
 							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">Deepgram Nova</th>
 							<td class="py-3 px-3 text-slate-700">
-								<code class="font-mono text-xs">results.channels[0].alternatives[0].words[]</code> with <code class="font-mono text-xs">punctuated_word</code> and numeric speaker IDs
+								<code class="font-mono text-xs">results.utterances[]</code> or <code class="font-mono text-xs">results.channels[0].alternatives[0].words[]</code> with <code class="font-mono text-xs">punctuated_word</code> and numeric speaker IDs
 							</td>
 							<td class="py-3 px-3">
-								<a href="/" class="text-sky-700 font-medium hover:underline">Main converter</a>
+								<a href="/deepgram-json-to-srt/" class="text-sky-700 font-medium hover:underline">Deepgram utterances preset</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">OpenAI <code class="font-mono text-xs">diarized_json</code></th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">segments[]</code> with <code class="font-mono text-xs">speaker</code>, <code class="font-mono text-xs">start</code>, <code class="font-mono text-xs">end</code>, and <code class="font-mono text-xs">id</code> values such as <code class="font-mono text-xs">seg_0</code>
+							</td>
+							<td class="py-3 px-3">
+								<a href="/gpt-4o-transcribe-diarize-srt/" class="text-sky-700 font-medium hover:underline">diarized_json preset</a>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row" class="py-3 px-3 font-semibold text-slate-900">Plain CapCut / Jianying draft</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">materials.texts[]</code> plus <code class="font-mono text-xs">target_timerange</code> in microseconds. Encrypted 6.0+ and template drafts are refused.
+							</td>
+							<td class="py-3 px-3">
+								<a href="/capcut-json-to-srt/" class="text-sky-700 font-medium hover:underline">CapCut JSON preset</a>
 							</td>
 						</tr>
 						<tr>
@@ -203,7 +221,7 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 				</table>
 			</div>
 			<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
-				For vertical Reels, Shorts, and TikTok timelines, our <a href="/short-video-caption-splitter/" class="text-sky-700 font-medium hover:underline">Short Video Caption Splitter</a> configures a 16-character single-line ceiling out of the box.
+				For vertical Reels, Shorts, and TikTok timelines, our <a href="/short-video-caption-splitter/" class="text-sky-700 font-medium hover:underline">Short Video Caption Splitter</a> configures a 16-character single-line ceiling out of the box. faster-whisper segment dumps have a <a href="/faster-whisper-srt/" class="text-sky-700 font-medium hover:underline">dedicated preset</a>, and Premiere import failures are covered on the <a href="/premiere-pro-srt-import/" class="text-sky-700 font-medium hover:underline">generic SRT error page</a>.
 			</p>
 		</section>
 
@@ -212,7 +230,7 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 				Independent Non-Affiliation Notice and Contact
 			</h2>
 			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
-				JSON to SRT (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code>) is an independent, clean-room software project released under the MIT License. It is not affiliated with, endorsed by, or sponsored by OpenAI, WhisperX authors, Georgi Gerganov (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">whisper.cpp</code>), Deepgram, Inc., or AssemblyAI, Inc. Third-party product and format names appear strictly to describe compatible input schemas.
+				JSON to SRT (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code>) is an independent, clean-room software project released under the MIT License. It is not affiliated with, endorsed by, or sponsored by OpenAI, WhisperX authors, Georgi Gerganov (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">whisper.cpp</code>), Deepgram, Inc., AssemblyAI, Inc., Adobe, or the publishers of CapCut and Jianying. Third-party product and format names appear strictly to describe compatible input schemas.
 			</p>
 			<div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 sm:p-5 space-y-2">
 				<h3 class="text-sm font-semibold text-slate-950">Contact Maintainers</h3>

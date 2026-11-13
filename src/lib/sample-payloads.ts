@@ -1,7 +1,7 @@
-import type { DialectId } from './types';
+import type { SampleId } from './types';
 
 export const SAMPLE_PAYLOADS: Record<
-	DialectId,
+	SampleId,
 	{ label: string; filename: string; json: string }
 > = {
 	'openai-verbose-json': {
@@ -424,4 +424,447 @@ export const SAMPLE_PAYLOADS: Record<
 			2,
 		),
 	},
+	'openai-diarized-json': {
+		label: 'OpenAI diarized_json',
+		filename: 'gpt-4o-transcribe-diarize.json',
+		json: JSON.stringify(
+			{
+				task: 'transcribe',
+				duration: 14.86,
+				text: 'Thanks for calling the studio line. I need the speaker labels from diarized_json, not a single paragraph. I will export those turns as an SRT file.',
+				segments: [
+					{
+						id: 'seg_0',
+						type: 'transcript.text.segment',
+						speaker: 'agent',
+						text: 'Thanks for calling the studio line.',
+						start: 0.42,
+						end: 2.86,
+					},
+					{
+						id: 'seg_1',
+						type: 'transcript.text.segment',
+						speaker: 'caller',
+						text: 'I need the speaker labels from diarized_json, not a single paragraph.',
+						start: 3.24,
+						end: 8.12,
+					},
+					{
+						id: 'seg_2',
+						type: 'transcript.text.segment',
+						speaker: 'agent',
+						text: 'I will export those turns as an SRT file.',
+						start: 8.7,
+						end: 12.48,
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
+	'capcut-draft': {
+		label: 'CapCut draft_content.json',
+		filename: 'draft_content.json',
+		json: JSON.stringify(
+			{
+				id: 'draft-readable-sample',
+				duration: 10_400_000,
+				materials: {
+					texts: [
+						{
+							id: 'caption-1',
+							type: 'subtitle',
+							content: JSON.stringify({
+								text: 'Plain CapCut drafts keep caption text.',
+								styles: [{ range: [0, 38], size: 12 }],
+							}),
+						},
+						{
+							id: 'caption-2',
+							type: 'subtitle',
+							content: JSON.stringify({
+								text: 'Timeline ranges use microseconds.',
+							}),
+						},
+						{
+							id: 'caption-3',
+							type: 'subtitle',
+							content: JSON.stringify({
+								text: 'Encrypted 6.0 drafts cannot be read.',
+							}),
+						},
+						{
+							id: 'title-off-timeline',
+							type: 'text',
+							content: JSON.stringify({ text: 'This title is not on a track.' }),
+						},
+					],
+					videos: [{ id: 'video-1', type: 'video' }],
+				},
+				tracks: [
+					{
+						type: 'video',
+						segments: [
+							{
+								material_id: 'video-1',
+								target_timerange: { start: 0, duration: 10_400_000 },
+							},
+						],
+					},
+					{
+						type: 'text',
+						segments: [
+							{
+								material_id: 'caption-1',
+								target_timerange: { start: 200_000, duration: 2_800_000 },
+							},
+							{
+								material_id: 'caption-2',
+								target_timerange: { start: 3_400_000, duration: 2_600_000 },
+							},
+							{
+								material_id: 'caption-3',
+								target_timerange: { start: 6_600_000, duration: 3_200_000 },
+							},
+						],
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
+	'faster-whisper-json': {
+		label: 'faster-whisper segments JSON',
+		filename: 'faster-whisper-segments.json',
+		json: JSON.stringify(
+			{
+				language: 'en',
+				language_probability: 0.98,
+				duration: 8.74,
+				segments: [
+					{
+						id: 0,
+						seek: 0,
+						start: 0.22,
+						end: 4.18,
+						text: ' faster-whisper returns segments and word timings, not an SRT file.',
+						avg_logprob: -0.21,
+						compression_ratio: 1.28,
+						no_speech_prob: 0.01,
+						words: [
+							{ word: ' faster-whisper', start: 0.22, end: 0.96, probability: 0.94 },
+							{ word: ' returns', start: 1.02, end: 1.38, probability: 0.99 },
+							{ word: ' segments', start: 1.44, end: 1.92, probability: 0.97 },
+							{ word: ' and', start: 1.96, end: 2.1, probability: 0.99 },
+							{ word: ' word', start: 2.14, end: 2.4, probability: 0.98 },
+							{ word: ' timings,', start: 2.46, end: 2.98, probability: 0.96 },
+							{ word: ' not', start: 3.34, end: 3.52, probability: 0.99 },
+							{ word: ' an', start: 3.56, end: 3.68, probability: 0.99 },
+							{ word: ' SRT', start: 3.72, end: 3.98, probability: 0.95 },
+							{ word: ' file.', start: 4.02, end: 4.18, probability: 0.98 },
+						],
+					},
+					{
+						id: 1,
+						seek: 418,
+						start: 4.86,
+						end: 8.74,
+						text: ' Save segments to JSON, then reflow the cues before export.',
+						avg_logprob: -0.18,
+						compression_ratio: 1.22,
+						no_speech_prob: 0.02,
+						words: [
+							{ word: ' Save', start: 4.86, end: 5.14, probability: 0.99 },
+							{ word: ' segments', start: 5.2, end: 5.68, probability: 0.97 },
+							{ word: ' to', start: 5.72, end: 5.84, probability: 0.99 },
+							{ word: ' JSON,', start: 5.9, end: 6.34, probability: 0.96 },
+							{ word: ' then', start: 6.72, end: 6.96, probability: 0.98 },
+							{ word: ' reflow', start: 7.02, end: 7.4, probability: 0.95 },
+							{ word: ' the', start: 7.44, end: 7.56, probability: 0.99 },
+							{ word: ' cues', start: 7.6, end: 7.92, probability: 0.97 },
+							{ word: ' before', start: 7.98, end: 8.28, probability: 0.98 },
+							{ word: ' export.', start: 8.34, end: 8.74, probability: 0.97 },
+						],
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
+	'premiere-source-json': {
+		label: 'Premiere source JSON',
+		filename: 'premiere-source.json',
+		json: JSON.stringify(
+			{
+				task: 'transcribe',
+				language: 'english',
+				duration: 9.2,
+				text: 'José checked the SRT after Premiere reported a generic import error. Comma milliseconds and no byte-order mark let the caption track load.',
+				segments: [
+					{
+						id: 0,
+						start: 0.36,
+						end: 4.42,
+						text: ' José checked the SRT after Premiere reported a generic import error.',
+						words: [
+							{ word: 'José', start: 0.36, end: 0.68 },
+							{ word: 'checked', start: 0.74, end: 1.12 },
+							{ word: 'the', start: 1.16, end: 1.28 },
+							{ word: 'SRT', start: 1.34, end: 1.66 },
+							{ word: 'after', start: 1.72, end: 1.98 },
+							{ word: 'Premiere', start: 2.04, end: 2.52 },
+							{ word: 'reported', start: 2.58, end: 3.02 },
+							{ word: 'a', start: 3.06, end: 3.14 },
+							{ word: 'generic', start: 3.18, end: 3.58 },
+							{ word: 'import', start: 3.64, end: 3.96 },
+							{ word: 'error.', start: 4.02, end: 4.42 },
+						],
+					},
+					{
+						id: 1,
+						start: 5.08,
+						end: 9.2,
+						text: ' Comma milliseconds and no byte-order mark let the caption track load.',
+						words: [
+							{ word: 'Comma', start: 5.08, end: 5.46 },
+							{ word: 'milliseconds', start: 5.52, end: 6.18 },
+							{ word: 'and', start: 6.24, end: 6.38 },
+							{ word: 'no', start: 6.42, end: 6.58 },
+							{ word: 'byte-order', start: 6.64, end: 7.22 },
+							{ word: 'mark', start: 7.28, end: 7.56 },
+							{ word: 'let', start: 7.84, end: 8.02 },
+							{ word: 'the', start: 8.06, end: 8.18 },
+							{ word: 'caption', start: 8.22, end: 8.58 },
+							{ word: 'track', start: 8.62, end: 8.86 },
+							{ word: 'load.', start: 8.92, end: 9.2 },
+						],
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
+	'deepgram-utterances': {
+		label: 'Deepgram utterances (speakers)',
+		filename: 'deepgram-utterances.json',
+		json: JSON.stringify(
+			{
+				metadata: {
+					duration: 11.08,
+					channels: 1,
+					request_id: 'sample-utterances-local',
+				},
+				results: {
+					channels: [
+						{
+							alternatives: [
+								{
+									transcript:
+										'Deepgram utterances group one speaker turn. The next speaker starts a new utterance with its own word timings.',
+									confidence: 0.98,
+									words: [
+										{
+											word: 'ignored',
+											punctuated_word: 'Ignored',
+											start: 0.2,
+											end: 0.5,
+											speaker: 0,
+										},
+									],
+								},
+							],
+						},
+					],
+					utterances: [
+						{
+							start: 0.28,
+							end: 4.62,
+							confidence: 0.986,
+							channel: 0,
+							speaker: 0,
+							id: 'utt-host-1',
+							transcript: 'Deepgram utterances group one speaker turn.',
+							words: [
+								{
+									word: 'deepgram',
+									punctuated_word: 'Deepgram',
+									start: 0.28,
+									end: 0.78,
+									confidence: 0.99,
+									speaker: 0,
+								},
+								{
+									word: 'utterances',
+									punctuated_word: 'utterances',
+									start: 0.84,
+									end: 1.52,
+									confidence: 0.97,
+									speaker: 0,
+								},
+								{
+									word: 'group',
+									punctuated_word: 'group',
+									start: 1.58,
+									end: 1.92,
+									confidence: 0.98,
+									speaker: 0,
+								},
+								{
+									word: 'one',
+									punctuated_word: 'one',
+									start: 1.98,
+									end: 2.16,
+									confidence: 0.99,
+									speaker: 0,
+								},
+								{
+									word: 'speaker',
+									punctuated_word: 'speaker',
+									start: 2.22,
+									end: 2.68,
+									confidence: 0.98,
+									speaker: 0,
+								},
+								{
+									word: 'turn',
+									punctuated_word: 'turn.',
+									start: 2.74,
+									end: 3.18,
+									confidence: 0.99,
+									speaker: 0,
+								},
+							],
+						},
+						{
+							start: 5.36,
+							end: 10.84,
+							confidence: 0.974,
+							channel: 0,
+							speaker: 1,
+							id: 'utt-guest-1',
+							transcript:
+								'The next speaker starts a new utterance with its own word timings.',
+							words: [
+								{
+									word: 'the',
+									punctuated_word: 'The',
+									start: 5.36,
+									end: 5.52,
+									confidence: 0.99,
+									speaker: 1,
+								},
+								{
+									word: 'next',
+									punctuated_word: 'next',
+									start: 5.58,
+									end: 5.86,
+									confidence: 0.98,
+									speaker: 1,
+								},
+								{
+									word: 'speaker',
+									punctuated_word: 'speaker',
+									start: 5.92,
+									end: 6.34,
+									confidence: 0.97,
+									speaker: 1,
+								},
+								{
+									word: 'starts',
+									punctuated_word: 'starts',
+									start: 6.4,
+									end: 6.78,
+									confidence: 0.98,
+									speaker: 1,
+								},
+								{
+									word: 'a',
+									punctuated_word: 'a',
+									start: 6.82,
+									end: 6.92,
+									confidence: 0.99,
+									speaker: 1,
+								},
+								{
+									word: 'new',
+									punctuated_word: 'new',
+									start: 6.96,
+									end: 7.18,
+									confidence: 0.99,
+									speaker: 1,
+								},
+								{
+									word: 'utterance',
+									punctuated_word: 'utterance',
+									start: 7.24,
+									end: 7.82,
+									confidence: 0.96,
+									speaker: 1,
+								},
+								{
+									word: 'with',
+									punctuated_word: 'with',
+									start: 7.88,
+									end: 8.08,
+									confidence: 0.99,
+									speaker: 1,
+								},
+								{
+									word: 'its',
+									punctuated_word: 'its',
+									start: 8.12,
+									end: 8.28,
+									confidence: 0.98,
+									speaker: 1,
+								},
+								{
+									word: 'own',
+									punctuated_word: 'own',
+									start: 8.34,
+									end: 8.54,
+									confidence: 0.99,
+									speaker: 1,
+								},
+								{
+									word: 'word',
+									punctuated_word: 'word',
+									start: 8.6,
+									end: 8.86,
+									confidence: 0.98,
+									speaker: 1,
+								},
+								{
+									word: 'timings',
+									punctuated_word: 'timings.',
+									start: 8.92,
+									end: 9.48,
+									confidence: 0.97,
+									speaker: 1,
+								},
+							],
+						},
+					],
+				},
+			},
+			null,
+			2,
+		),
+	},
 };
+
+export const SAMPLE_ORDER: SampleId[] = [
+	'openai-verbose-json',
+	'faster-whisper-json',
+	'premiere-source-json',
+	'openai-diarized-json',
+	'whisperx-diarized',
+	'whisper-cpp',
+	'deepgram-nova',
+	'deepgram-utterances',
+	'assemblyai-utterances',
+	'capcut-draft',
+];

@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ConverterWorkbench from '../components/ConverterWorkbench.astro';
+import { convertAsrJson } from '../lib/subtitle-engine';
+import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
 import {
 	FORMAT_FIELD_CARDS,
 	HOW_IT_WORKS_STEPS,
@@ -21,10 +23,92 @@ interface Props {
 }
 
 const { preset } = Astro.props;
+const guideSample = SAMPLE_PAYLOADS[preset.defaultSampleId];
+const guideExport = preset.guides?.length
+	? convertAsrJson(guideSample.json, preset.defaultOptions)
+	: null;
 ---
 
 <BaseLayout preset={preset}>
 	<ConverterWorkbench preset={preset} />
+
+	{
+		preset.guides?.map((guide) => (
+			<section
+				id={guide.id}
+				aria-labelledby={`${guide.id}-heading`}
+				class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+			>
+				<div class="space-y-1">
+					<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+						{guide.kicker}
+					</p>
+					<h2 id={`${guide.id}-heading`} class="text-lg sm:text-xl font-bold text-slate-950">
+						{guide.heading}
+					</h2>
+				</div>
+				{guide.paragraphs.map((paragraph) => (
+					<p class="text-sm text-slate-700 leading-relaxed">{paragraph}</p>
+				))}
+				{guide.bullets && (
+					<ul class="space-y-2 text-sm text-slate-700 leading-relaxed list-disc pl-5">
+						{guide.bullets.map((bullet) => (
+							<li>{bullet}</li>
+						))}
+					</ul>
+				)}
+				{guide.code && (
+					<div class="space-y-2 min-w-0">
+						<p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+							{guide.code.label}
+						</p>
+						<pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{guide.code.source}</code></pre>
+					</div>
+				)}
+				{guide.links && (
+					<ul class="flex flex-col gap-2 text-sm">
+						{guide.links.map((link) => (
+							<li>
+								<a
+									href={link.href}
+									class="font-semibold text-sky-800 underline underline-offset-4"
+								>
+									{link.label}
+								</a>
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
+		))
+	}
+
+	{
+		guideExport?.ok && (
+			<section
+				aria-labelledby="expected-output-heading"
+				class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+			>
+				<div class="space-y-1">
+					<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+						Expected output
+					</p>
+					<h2 id="expected-output-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+						SRT this sample exports before you edit the controls
+					</h2>
+					<p class="text-sm text-slate-700 leading-relaxed">
+						Generated in the page build from {guideSample.filename} with the preset line width,
+						speaker switch, and format. The same text is already in the output box. Copy or
+						download it to record a subtitle_export, or change a control and export again.
+					</p>
+				</div>
+				<pre
+					data-testid="expected-srt"
+					class="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-900"
+				><code>{guideExport.output}</code></pre>
+			</section>
+		)
+	}
 
 	<section aria-labelledby="how-it-works-heading" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5">
 		<div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
@@ -67,7 +151,7 @@ const { preset } = Astro.props;
 				JSON Schema Notes &amp; Format Field Reference for {preset.navLabel}
 			</h2>
 			<p class="text-sm text-slate-600">
-				Detailed parser behavior for this workflow alongside field references for all five supported speech-to-text JSON dialects.
+				Detailed parser behavior for this workflow alongside field references for every supported speech-to-text JSON dialect.
 			</p>
 		</div>
 
@@ -114,7 +198,7 @@ const { preset } = Astro.props;
 				Related Subtitle Workflows
 			</h2>
 			<p class="text-sm text-slate-600">
-				Switch between all six specialized Whisper and ASR subtitle converters with pre-tuned line widths, speaker diarization labels, and export formats.
+				Switch between the specialized subtitle converters. Each one preloads a real sample, line width, speaker setting, and export format.
 			</p>
 		</div>
 

@@ -352,4 +352,65 @@ test.describe('Whisper JSON to SRT converter journeys', () => {
 		const aboutScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
 		expect(aboutScrollWidth).toBeLessThanOrEqual(375);
 	});
+
+	test('long-tail tool pages preload a sample, export SRT, and stay within 375px', async ({
+		page,
+	}) => {
+		const routes: Array<{ path: string; status: RegExp; output: RegExp }> = [
+			{
+				path: '/faster-whisper-srt/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /faster-whisper returns segments/,
+			},
+			{
+				path: '/premiere-pro-srt-import/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /José/,
+			},
+			{
+				path: '/capcut-json-to-srt/',
+				status: /CapCut draft JSON/,
+				output: /Plain CapCut drafts keep caption text/,
+			},
+			{
+				path: '/gpt-4o-transcribe-diarize-srt/',
+				status: /OpenAI diarized_json/,
+				output: /\[agent\]/,
+			},
+			{
+				path: '/deepgram-json-to-srt/',
+				status: /Deepgram Nova JSON/,
+				output: /\[Speaker 0\]/,
+			},
+		];
+
+		for (const route of routes) {
+			const response = await page.goto(route.path);
+			expect(response?.status()).toBe(200);
+			await expect(page.locator('h1')).toBeVisible();
+			await expect(page.getByTestId('status-banner')).toHaveAttribute('data-status', 'ok');
+			await expect(page.getByTestId('status-banner')).toContainText(route.status);
+			const output = await readOutputText(page.getByTestId('subtitle-output'));
+			expect(output.charCodeAt(0)).not.toBe(0xfeff);
+			expect(output).toMatch(/\d{2}:\d{2}:\d{2},\d{3} --> /);
+			expect(output).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d{3}/);
+			expect(output).toMatch(route.output);
+			expect(output).not.toContain('Ignored');
+			const expected = await page.getByTestId('expected-srt').evaluate((el) => el.textContent ?? '');
+			expect(expected.trim()).toBe(output.trim());
+
+			await page.getByTestId('copy-output-btn').click();
+			await expect.poll(() => readDataLayerSnapshot(page)).toMatchObject({
+				isArray: true,
+				subtitleExportFormats: ['srt'],
+			});
+		}
+
+		await page.setViewportSize({ width: 375, height: 812 });
+		for (const route of routes) {
+			await page.goto(route.path);
+			const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+			expect(scrollWidth).toBeLessThanOrEqual(375);
+		}
+	});
 });
