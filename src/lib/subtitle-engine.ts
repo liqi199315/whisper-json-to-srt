@@ -724,14 +724,20 @@ function isOpenAiDiarizedJson(root: Record<string, unknown>): boolean {
 
 function looksLikeEncryptedProjectFile(raw: string): boolean {
 	const trimmed = raw.trim();
+	if (trimmed.length === 0) return false;
 	if (trimmed.startsWith('{') || trimmed.startsWith('[')) return false;
-	if (trimmed.length >= 80) return true;
+	if (/[\r\n]/.test(trimmed)) return false;
+	if (/\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}/.test(trimmed)) return false;
+
+	let controlChars = 0;
 	for (const char of trimmed) {
 		const code = char.charCodeAt(0);
-		const printable = code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126);
-		if (!printable) return true;
+		if (code === 9 || code === 32) return false;
+		if (code < 32) controlChars += 1;
 	}
-	return false;
+	if (controlChars > 0) return true;
+
+	return trimmed.length >= 80 && /^[A-Za-z0-9+/_=-]+$/.test(trimmed);
 }
 
 const ENCRYPTED_DRAFT_ERROR =
@@ -819,17 +825,17 @@ export function parseAsrJson(rawJsonText: string): ParseResult {
 	}
 
 	const normalizedJsonText = rawJsonText.replace(/^\uFEFF/, '');
-	if (looksLikeEncryptedProjectFile(normalizedJsonText)) {
-		return {
-			ok: false,
-			error: ENCRYPTED_DRAFT_ERROR,
-		};
-	}
 
 	let parsedJson: unknown;
 	try {
 		parsedJson = JSON.parse(normalizedJsonText);
 	} catch (err) {
+		if (looksLikeEncryptedProjectFile(normalizedJsonText)) {
+			return {
+				ok: false,
+				error: ENCRYPTED_DRAFT_ERROR,
+			};
+		}
 		const detail = err instanceof Error ? err.message : 'unexpected token';
 		return {
 			ok: false,

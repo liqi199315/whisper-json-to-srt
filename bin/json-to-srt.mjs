@@ -539,14 +539,18 @@ function isOpenAiDiarizedJson(root) {
 }
 function looksLikeEncryptedProjectFile(raw) {
   const trimmed = raw.trim();
+  if (trimmed.length === 0) return false;
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) return false;
-  if (trimmed.length >= 80) return true;
+  if (/[\r\n]/.test(trimmed)) return false;
+  if (/\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}/.test(trimmed)) return false;
+  let controlChars = 0;
   for (const char of trimmed) {
     const code = char.charCodeAt(0);
-    const printable = code === 9 || code === 10 || code === 13 || code >= 32 && code <= 126;
-    if (!printable) return true;
+    if (code === 9 || code === 32) return false;
+    if (code < 32) controlChars += 1;
   }
-  return false;
+  if (controlChars > 0) return true;
+  return trimmed.length >= 80 && /^[A-Za-z0-9+/_=-]+$/.test(trimmed);
 }
 var ENCRYPTED_DRAFT_ERROR = "This file is not readable JSON. CapCut and Jianying 6.0+ project files, and template-based drafts, are encrypted and cannot be converted. Copy a plain-text draft_content.json (Windows) or draft_info.json (macOS) from a non-template project.";
 var EMPTY_CAPCUT_ERROR = "Detected a CapCut or Jianying draft, but no readable caption text was placed on the timeline. CapCut and Jianying 6.0+ project files and template-based drafts are encrypted and cannot be read. Use a plain-text draft_content.json or draft_info.json.";
@@ -614,16 +618,16 @@ function parseAsrJson(rawJsonText) {
     };
   }
   const normalizedJsonText = rawJsonText.replace(/^\uFEFF/, "");
-  if (looksLikeEncryptedProjectFile(normalizedJsonText)) {
-    return {
-      ok: false,
-      error: ENCRYPTED_DRAFT_ERROR
-    };
-  }
   let parsedJson;
   try {
     parsedJson = JSON.parse(normalizedJsonText);
   } catch (err) {
+    if (looksLikeEncryptedProjectFile(normalizedJsonText)) {
+      return {
+        ok: false,
+        error: ENCRYPTED_DRAFT_ERROR
+      };
+    }
     const detail = err instanceof Error ? err.message : "unexpected token";
     return {
       ok: false,

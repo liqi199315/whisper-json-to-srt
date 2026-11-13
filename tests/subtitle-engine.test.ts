@@ -492,6 +492,31 @@ describe('faster-whisper, Premiere SRT, CapCut, diarized_json, and Deepgram utte
 		expect(converted.output).toContain('00:00:00,200 --> 00:00:03,000');
 	});
 
+	it('keeps ordinary non-JSON text on the generic syntax error', () => {
+		const srt = `1
+00:00:00,360 --> 00:00:04,420
+Jose checked the SRT after Premiere reported a generic import error.
+
+2
+00:00:05,080 --> 00:00:09,200
+Comma milliseconds and no byte-order mark let the caption track load.
+`;
+		expect(srt.trim().length).toBeGreaterThan(80);
+		const pastedSrt = parseAsrJson(srt);
+		expect(pastedSrt.ok).toBe(false);
+		if (!pastedSrt.ok) {
+			expect(pastedSrt.error).toMatch(/invalid json syntax/i);
+			expect(pastedSrt.error).not.toMatch(/encrypted/i);
+		}
+
+		const chinese = parseAsrJson('中文测试');
+		expect(chinese.ok).toBe(false);
+		if (!chinese.ok) {
+			expect(chinese.error).toMatch(/invalid json syntax/i);
+			expect(chinese.error).not.toMatch(/encrypted/i);
+		}
+	});
+
 	it('refuses encrypted or non-JSON project blobs and empty CapCut drafts', () => {
 		const encrypted = parseAsrJson('A'.repeat(120));
 		expect(encrypted.ok).toBe(false);
