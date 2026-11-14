@@ -33,7 +33,7 @@ Read these four files in order at the start of every session before you change c
 		- `/about/` (`dist/about/index.html`)
 		- `/privacy/` (`dist/privacy/index.html`)
 		- `/terms/` (`dist/terms/index.html`)
-- **Auxiliary static outputs.** `dist/404.html`, `dist/sitemap-index.xml`, `dist/robots.txt`, `dist/llms.txt`, `dist/_headers`, `dist/og-image.svg`, `dist/og-image.png`, `dist/github-social-preview.png`, `dist/site.webmanifest`, `dist/indexnow-key.txt`, and `dist/a8f4c2e91b7d40639e5a12c8d4f07b31.txt`.
+- **Auxiliary static outputs (12 files).** `dist/404.html`, `dist/sitemap-index.xml`, `dist/robots.txt`, `dist/llms.txt`, `dist/_headers`, `dist/og-image.svg`, `dist/og-image.png`, `dist/github-social-preview.png`, `dist/site.webmanifest`, `dist/indexnow-key.txt`, `dist/a8f4c2e91b7d40639e5a12c8d4f07b31.txt`, and `dist/release.json` (written after `astro build`; `project`, `siteUrl`, `routeCount`, and `routes` must match `sitemap-0.xml`).
 
 ## Non-negotiable red lines
 

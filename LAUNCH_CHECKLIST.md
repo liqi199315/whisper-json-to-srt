@@ -1,6 +1,6 @@
 # Production Launch Checklist (`jsontosrt.com`)
 
-Step-by-step copy-paste runbook. Email Routing, Bing Webmaster Tools, the shared analytics registry, and the report checks were completed on 2026-11-12 (see the live launch record). Remaining `[人工]` work is community launch posts from `LAUNCH_KIT.md` and an optional GitHub visibility change.
+Step-by-step copy-paste runbook. Email Routing, Bing Webmaster Tools, the shared analytics registry, and the report checks were completed on 2026-11-12 (see the live launch record). On 2026-11-15 the live sitemap had the same 14 URLs as the local build, including the five long-tail routes, but live `release.json` was absent. Remaining `[人工]` work is community launch posts from `LAUNCH_KIT.md`. The GitHub repository `https://github.com/liqi199315/whisper-json-to-srt` is public (`visibility: PUBLIC` on 2026-11-15); visibility is no longer a remaining task.
 
 - **Repository path:** `/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt`
 - **Canonical domain:** `https://jsontosrt.com` (trademark-clean generic format domain; avoids third-party ASR brand names in the hostname)
@@ -22,7 +22,7 @@ Step-by-step copy-paste runbook. Email Routing, Bing Webmaster Tools, the shared
 - Bing Webmaster Tools verified (`IsVerified: true` via Cloudflare unproxied `verify.bing.com` CNAME). Sitemap `https://jsontosrt.com/sitemap-index.xml` submitted via `SubmitFeed`.
 - `ga4-report.mjs`, `gsc-report.mjs`, `bing-report.mjs`, and `analytics-registry.test.mjs` all exited `0`.
 - Search engine submission does not establish indexing. Google sitemap processing is still pending.
-- `[人工]` remaining: manual community launch posts from `LAUNCH_KIT.md` (Show HN, Reddit, X, Product Hunt) and toggling GitHub repo visibility if desired (currently private `https://github.com/liqi199315/whisper-json-to-srt`).
+- `[人工]` recorded on 2026-11-12: manual community launch posts from `LAUNCH_KIT.md` (Show HN, Reddit, X, Product Hunt) and toggling GitHub repo visibility if desired. The visibility item is closed: `https://github.com/liqi199315/whisper-json-to-srt` was public when checked on 2026-11-15 (`visibility: PUBLIC`, `PublicEvent` at `2026-11-12T06:34:28Z`). Whether Show HN, Reddit, and X were posted was not rechecked. Product Hunt appeared as 3 GA4 sessions and is not recorded as a completed launch post.
 
 ---
 
@@ -36,7 +36,15 @@ npm run verify:all
 python3 /Users/dake/Projects/aiapp/_ops/generate-project-index.py
 ```
 
-Confirm Vitest, `astro build`, `scripts/seo-preflight.mjs` (9 routes + 11 auxiliary files), and Playwright (6/6 Chromium tests) all exit `0`.
+Confirm Vitest, `astro build` (which also runs `npm run release:manifest` and writes `dist/release.json`), `scripts/seo-preflight.mjs` (14 content routes + 12 auxiliary files, including `release.json`), and Playwright (7/7 Chromium tests) all exit `0`. The 9-route / 11-auxiliary counts were the 2026-11-12 first launch only.
+
+`verify:all` does not compare the build with production. After the build, check the live sitemap and release manifest without deploying:
+
+```bash
+npm run release:check
+```
+
+`release:check` runs `indie-release-manifest.mjs --check-live --allow-pending-deploy`. On 2026-11-15 it exited `0` with status `pending_live_manifest`: local and live sitemaps both had 14 routes and matched, but `https://jsontosrt.com/release.json` was not on the live site. Exit `0` with that status does not prove the live Worker commit. A missing live manifest stays acceptable only while `--allow-pending-deploy` is passed. After the next deploy, `release.json` must be live and its `source.commit` must match the deployed Git commit before this check can prove the live version.
 
 ---
 
@@ -132,7 +140,7 @@ curl -fsSL https://jsontosrt.com/og-image.png
    ```text
    build-android@charged-sector-382503.iam.gserviceaccount.com
    ```
-4. Open **Sitemaps** and submit:
+4. Open **Sitemaps** and submit the sitemap index, then confirm the child sitemap covers all 14 canonical URLs. The locs are in `sitemap-0.xml`. The 2026-11-12 submission was the original 9 URLs; the five long-tail URLs are part of the current live sitemap.
    ```text
    https://jsontosrt.com/sitemap-index.xml
    ```
@@ -148,9 +156,11 @@ curl -fsSL https://jsontosrt.com/og-image.png
    https://jsontosrt.com/sitemap-index.xml
    ```
 
-### 6C. Push all 9 routes via IndexNow
+### 6C. Push all 14 routes via IndexNow
 
-Submit all 9 canonical URLs to IndexNow using the built key in `dist/indexnow-key.txt`:
+The 2026-11-12 submission used the original 9 URLs (the first six tool URLs plus `/about/`, `/privacy/`, and `/terms/`) and returned HTTP `202`. Current content is 14 URLs. The five long-tail URLs were live in the sitemap on 2026-11-15, but this checklist does not record a second IndexNow submission for them. Resubmit the full current list only when those five URLs still need to be sent. Acceptance is not indexing.
+
+Submit all 14 canonical URLs to IndexNow using the built key in `dist/indexnow-key.txt`:
 
 ```bash
 cd /Users/dake/Projects/aiapp/30_products/whisper-json-to-srt
@@ -168,6 +178,11 @@ curl -i -X POST "https://api.indexnow.org/indexnow" \
       \"https://jsontosrt.com/whisperx-diarized-json-to-srt/\",
       \"https://jsontosrt.com/whisper-cpp-json-to-srt/\",
       \"https://jsontosrt.com/short-video-caption-splitter/\",
+      \"https://jsontosrt.com/faster-whisper-srt/\",
+      \"https://jsontosrt.com/premiere-pro-srt-import/\",
+      \"https://jsontosrt.com/capcut-json-to-srt/\",
+      \"https://jsontosrt.com/gpt-4o-transcribe-diarize-srt/\",
+      \"https://jsontosrt.com/deepgram-json-to-srt/\",
       \"https://jsontosrt.com/about/\",
       \"https://jsontosrt.com/privacy/\",
       \"https://jsontosrt.com/terms/\"
@@ -175,7 +190,7 @@ curl -i -X POST "https://api.indexnow.org/indexnow" \
   }"
 ```
 
-Expect HTTP `200` or `202 Accepted`.
+Expect HTTP `200` or `202 Accepted`. The original 9-URL list from 2026-11-12 is the first six tool URLs plus `/about/`, `/privacy/`, and `/terms/`, without the five long-tail routes.
 
 ---
 

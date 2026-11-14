@@ -116,7 +116,10 @@ export const EXTRA_REQUIRED_FILES = [
 	'site.webmanifest',
 	'indexnow-key.txt',
 	'a8f4c2e91b7d40639e5a12c8d4f07b31.txt',
+	'release.json',
 ];
+
+const RELEASE_PROJECT = 'whisperjsontosrt';
 
 const LONG_DASH_PATTERN = /[\u2013\u2014]|&(?:mdash|ndash|#8211|#8212|#x2013|#x2014);/i;
 const FILLER_LATIN_PATTERN = new RegExp(`lor${'em'}\\s+ip${'sum'}`, 'i');
@@ -330,6 +333,48 @@ function resolveInternalHref(distDir, href) {
 		}
 	}
 	return null;
+}
+
+
+function checkReleaseManifest(distDir, siteOrigin, routes, errors) {
+	const rel = 'release.json';
+	const absPath = path.join(distDir, rel);
+	if (!isExistingFile(absPath)) {
+		return;
+	}
+	let manifest;
+	try {
+		manifest = JSON.parse(readFileSync(absPath, 'utf8'));
+	} catch (error) {
+		errors.push(`dist/${rel}: invalid JSON (${error instanceof Error ? error.message : String(error)})`);
+		return;
+	}
+	if (manifest.project !== RELEASE_PROJECT) {
+		errors.push(`dist/${rel}: project "${manifest.project}" must be "${RELEASE_PROJECT}"`);
+	}
+	const origin = String(siteOrigin).replace(/\/$/, '');
+	if (manifest.siteUrl !== origin) {
+		errors.push(`dist/${rel}: siteUrl "${manifest.siteUrl}" must be "${origin}"`);
+	}
+	const expected = routes.map((entry) => `${origin}${entry.route}`).sort();
+	const actual = Array.isArray(manifest.routes) ? [...manifest.routes].sort() : null;
+	if (!actual || actual.length !== expected.length || actual.some((route, index) => route !== expected[index])) {
+		errors.push(`dist/${rel}: routes do not match the built route set (${actual ? actual.length : 0} vs ${expected.length})`);
+	}
+	if (manifest.routeCount !== expected.length) {
+		errors.push(`dist/${rel}: routeCount ${manifest.routeCount} must equal ${expected.length}`);
+	}
+	const sitemapPath = path.join(distDir, 'sitemap-0.xml');
+	if (!isExistingFile(sitemapPath)) {
+		errors.push('dist/release.json: missing sitemap-0.xml to compare routes');
+		return;
+	}
+	const sitemapRoutes = [...readFileSync(sitemapPath, 'utf8').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+		.map((match) => match[1])
+		.sort();
+	if (sitemapRoutes.length !== expected.length || sitemapRoutes.some((route, index) => route !== expected[index])) {
+		errors.push(`dist/${rel}: sitemap-0.xml routes do not match the expected route set`);
+	}
 }
 
 export function inspectDist(distDir, options = {}) {
@@ -560,6 +605,8 @@ export function inspectDist(distDir, options = {}) {
 			errors.push('dist/_headers: missing Strict-Transport-Security header');
 		}
 	}
+
+	checkReleaseManifest(distDir, activeOrigin, contentRoutes, errors);
 
 	const wranglerPath = path.resolve(distDir, '..', 'wrangler.jsonc');
 	if (isExistingFile(wranglerPath)) {
