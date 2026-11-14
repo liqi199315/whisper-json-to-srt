@@ -3,8 +3,9 @@
 ## 当前阶段（2026-11-15）
 
 - **项目路径**：`/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt/`
-- **本地 HEAD**：C01 WIP `5dd36ca` 之上新增 C02 WIP 提交（`git log -1 --oneline`）；C01 之前的源码基线是 `4571298`。这些是本地提交，不是 Cloudflare Worker 部署版本，本轮未 push、未部署。
-- **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；当时线上首页与 6 种搜索爬虫请求返回 HTTP 200）。`2026-11-15` 已重新核验线上站点地图：14 个 URL 与本地完全一致，五个长尾页都在线上。线上没有 `release.json`，所以这次核验不能证明线上 Worker 对应 Git 提交 `4571298`。
+- **C02 代码提交**：`57de751`（在 C01 WIP `5dd36ca` 之上）。`4571298` 只作 C01 之前的源码基线，不是当前代码提交，也不是线上版本。线上没有 `release.json`，所以任何本地 commit 都未证明已上线。本轮未 push、未部署。
+- **C02 最终核对（主会话，2026-11-15）**：`npm run verify:all` 退出码 0（Vitest 53/53，Playwright 8/8，14 路由，26 个产物）。共享 release 测试 9/9。CLI overflow `--fail-on-qc` 退出码 3 且不写文件。证据 `/Volumes/WorkSSD/Scratch/c02-cli-final`。
+- **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；当时线上首页与 6 种搜索爬虫请求返回 HTTP 200）。`2026-11-15` 已重新核验线上站点地图：14 个 URL 与本地完全一致，五个长尾页都在线上。线上没有 `release.json`，所以任何本地 commit 都未证明已上线。`4571298` 只作 C01 之前的源码基线。
 - **代码仓库**：`https://github.com/liqi199315/whisper-json-to-srt` 当前为公开仓库。`2026-11-15` 用 `gh repo view` 读到 `visibility: PUBLIC`、`isPrivate: false`；仓库事件里 `2026-11-12T06:34:28Z` 有 `PublicEvent`。
 - **联系邮箱**：`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 已启用 Cloudflare Email Routing，转发至 `liqi199315@gmail.com`（2026-11-12 核验：`enabled: true, status: ready`；本轮未重查）
 - **90 天试验窗口**：`2026-11-12` 至 `2027-02-10`（详见 `PLAN_90DAY.md`）
@@ -52,12 +53,12 @@
 - `2026-11-12`：Bing Webmaster Tools 已验证（`IsVerified: true`，经由 Cloudflare 未代理的 `verify.bing.com` CNAME）。站点地图 `https://jsontosrt.com/sitemap-index.xml` 已通过 `SubmitFeed` 提交。
 - `2026-11-12`：`ga4-report.mjs`、`gsc-report.mjs`、`bing-report.mjs` 与 `analytics-registry.test.mjs` 均退出码 `0`。邮箱转发、Bing、共享统计注册与报表连通性检查已完成。
 - `[人工]` 剩余：按 `LAUNCH_KIT.md` 发布社区帖（Show HN、Reddit、X）。Product Hunt 已在 `2026-11-15` 的 GA4 来源里出现 3 个会话，但是否完成正式发布、以及 Show HN、Reddit、X 是否已发，本轮没有核验。GitHub 仓库可见性已不是待办：`https://github.com/liqi199315/whisper-json-to-srt` 当前为公开仓库。
-- 线上五个长尾页已在 `2026-11-15` 核实（站点地图 14 个 URL 与本地一致）。已知的 Worker 版本记录仍是 `2026-11-12` 的 `1e1de410-8c17-4e72-8ead-b922a1cc0f61` 与 `9df17e9b-8c95-43bc-89bc-9585393b189c`。线上没有 `release.json`，不能把本地 Git SHA `4571298` 写成线上提交。本轮没有执行部署。
+- 线上五个长尾页已在 `2026-11-15` 核实（站点地图 14 个 URL 与本地一致）。已知的 Worker 版本记录仍是 `2026-11-12` 的 `1e1de410-8c17-4e72-8ead-b922a1cc0f61` 与 `9df17e9b-8c95-43bc-89bc-9585393b189c`。线上没有 `release.json`，任何本地 commit 都未证明已上线。`4571298` 只作 C01 之前的源码基线，C02 代码提交是 `57de751`。本轮没有执行部署。
 
 ## 下一步第一动作
 
 - `[人工]` 核对 `LAUNCH_KIT.md` 里 Show HN、Reddit、X 是否已发；Product Hunt 只确认到来源会话，不记为发布完成。GitHub 仓库保持公开，不再做「私有改公开」。
-- 五个长尾页已在线上站点地图中。是否为这 5 个 URL 补交 IndexNow，以及 Google 是否已处理当前 14 页站点地图，留给后续发布核对；本文件不记录未执行的提交。线上没有 `release.json`，所以即使补交 IndexNow，也不能把线上版本写成 `4571298`。
+- 五个长尾页已在线上站点地图中。是否为这 5 个 URL 补交 IndexNow，以及 Google 是否已处理当前 14 页站点地图，留给后续发布核对；本文件不记录未执行的提交。线上没有 `release.json`，所以即使补交 IndexNow，也不能把任何本地 commit（包括 `4571298` 或 C02 的 `57de751`）写成线上版本。
 
 ## 行动记录
 
@@ -70,5 +71,5 @@
 - `2026-11-13` `[AI]`：修复 CapCut 加密检测误伤。`parseAsrJson` 先 `JSON.parse`，解析失败后只把无换行、无时间码的长 base64 风格单行或含控制字符的二进制判为加密草稿。粘贴 SRT 与短中文回到 `Invalid JSON syntax`。`npm run verify:all` 退出码 0：Vitest 38/38，Playwright 7/7。未部署。
 - `2026-11-13` `[AI]`：完成 `P1-4`。新增 5 个英文长尾工具页并写入站点地图、页眉页脚与相关工具内链：`/faster-whisper-srt/`、`/premiere-pro-srt-import/`、`/capcut-json-to-srt/`、`/gpt-4o-transcribe-diarize-srt/`、`/deepgram-json-to-srt/`。faster-whisper 与 Premiere 页复用 Whisper `segments`/`words` 解析；Deepgram 页复用已有 utterances 解析并换上双说话人样本。新增 CapCut 明文 draft 解析（微秒 `target_timerange`）与 OpenAI `diarized_json`（`seg_N` / `transcript.text.segment`）识别。加密或非 JSON 的 CapCut / 剪映 6.0+ 与模板工程返回明确拒绝，不声称可解密。SRT 序列化维持 UTF-8 无 BOM、逗号毫秒、LF、cue 之间单空行，并由单测锁定。`npm run verify:all` 退出码 0：Vitest 37/37，Astro 构建 15 页，`seo:check` 14 条路由 / 25 个必需文件 / 791 条内链，Playwright 7/7。未部署，也未在 Premiere、CapCut 客户端或 OpenAI 线上 API 上做实机导入。
 - `2026-11-12` `[AI]`：上线后最佳实践巡检收口：`wrangler.jsonc` 关闭 `workers_dev` 与 `preview_urls` 并重部署（Version `9df17e9b-8c95-43bc-89bc-9585393b189c`，真网验证 `whisper-json-to-srt.liqi199315.workers.dev` 已返回 HTTP `404` 消除重复源）；`public/_headers` 升级完整 `Content-Security-Policy` 与 `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` 并移除静态资产解析器忽略的域名行；通过 GA4 Admin API 注册 `export_action`、`output_format`、`dialect`、`size_bucket` 四个事件级自定义维度；通过 `gh repo edit` 补齐 GitHub 仓库主页、简介与 9 个 Topics，并同步 `PLAN_90DAY.md` 状态。
-- `2026-11-15` `[AI]`：把 `main` 从 `61defef` 快进到 `4571298`。只读核对后修正当前状态：源码为 14 条内容路由；GitHub 仓库为公开（`gh repo view` 的 `visibility: PUBLIC`，`2026-11-12T06:34:28Z` 有 `PublicEvent`）；GA4 近 28 天窗口有 69 用户 / 69 会话 / `subtitle_export` 2 次，GSC `2026-10-16` 至 `2026-11-12` 与 Bing 默认 28 天均为 0 点击、0 曝光。同日 `npm run release:check` 退出码 0，状态 `pending_live_manifest`：线上站点地图 14 个 URL 与本地完全一致，五个长尾页已在线上；线上没有 `release.json`，不能证明线上提交是 `4571298`。本轮没有部署。
-- `2026-11-15` `[AI]`：完成 C02 时间轴 QC。先用当前代码复现：JSON 里有限值 `1e308` 在微秒取整时溢出，cue 变成 `NaN`，导出为 `00:00:00,000 --> 00:00:00,000`。新增 `src/lib/timeline-qc.ts`，把输入扫描、cue 分析与稳定 issue code 分开；非法或不可表示时间不再伪装成 0，受影响 segment 省略并计数，全空时拒绝转换；倒序保留原时间只报告，重叠只报告不移动，空段省略并计数；负输入时间钳到 0 并报告，负用户偏移单独记 `offset-clamped`。页面新增常驻 QC 汇总/明细、复制或下载风险提示与 `.qc.txt` 报告下载，保留原有 `data-testid`；CLI 把报告写到 stderr，并新增 `--fail-on-qc`（有 error 时退出码 3，不写输出）。新增 `tests/fixtures/qc/` 脱敏 fixture 与 `tests/timeline-qc.test.ts`。`npx tsc --noEmit` 退出码 0；`npm run verify:all` 退出码 0（Vitest 53/53，Astro 15 页，`seo:check` 14 路由 / 26 个必需文件 / 791 条内链，Playwright 8/8）；`npm run release:check` 退出码 0，状态 `pending_live_manifest`。C02 本地 WIP 提交见 `git log -1 --oneline`；未 push、未部署。
+- `2026-11-15` `[AI]`：把 `main` 从 `61defef` 快进到 `4571298`。只读核对后修正当前状态：源码为 14 条内容路由；GitHub 仓库为公开（`gh repo view` 的 `visibility: PUBLIC`，`2026-11-12T06:34:28Z` 有 `PublicEvent`）；GA4 近 28 天窗口有 69 用户 / 69 会话 / `subtitle_export` 2 次，GSC `2026-10-16` 至 `2026-11-12` 与 Bing 默认 28 天均为 0 点击、0 曝光。同日 `npm run release:check` 退出码 0，状态 `pending_live_manifest`：线上站点地图 14 个 URL 与本地完全一致，五个长尾页已在线上；线上没有 `release.json`，不能证明线上提交。`4571298` 只是当时快进后的源码基线，不是线上版本。本轮没有部署。
+- `2026-11-15` `[AI]`：完成 C02 时间轴 QC。先用当前代码复现：JSON 里有限值 `1e308` 在微秒取整时溢出，cue 变成 `NaN`，导出为 `00:00:00,000 --> 00:00:00,000`。新增 `src/lib/timeline-qc.ts`，把输入扫描、cue 分析与稳定 issue code 分开；非法或不可表示时间不再伪装成 0，受影响 segment 省略并计数，全空时拒绝转换；倒序保留原时间只报告，重叠只报告不移动，空段省略并计数；负输入时间钳到 0 并报告，负用户偏移单独记 `offset-clamped`。页面新增常驻 QC 汇总/明细、复制或下载风险提示与 `.qc.txt` 报告下载，保留原有 `data-testid`；CLI 把报告写到 stderr，并新增 `--fail-on-qc`（有 error 时退出码 3，不写输出）。新增 `tests/fixtures/qc/` 脱敏 fixture 与 `tests/timeline-qc.test.ts`。`npx tsc --noEmit` 退出码 0；`npm run verify:all` 退出码 0（Vitest 53/53，Astro 15 页，`seo:check` 14 路由 / 26 个必需文件 / 791 条内链，Playwright 8/8）；`npm run release:check` 退出码 0，状态 `pending_live_manifest`。C02 代码提交是 `57de751`。主会话最终 `npm run verify:all` 退出码 0（Vitest 53/53，Playwright 8/8，14 路由，26 个产物）；共享 release 测试 9/9；CLI overflow `--fail-on-qc` 退出码 3 且不写文件。证据 `/Volumes/WorkSSD/Scratch/c02-cli-final`。线上没有 `release.json`，`57de751` 与 `4571298` 都未证明已上线。`4571298` 只作 C01 之前的源码基线。未 push、未部署。
