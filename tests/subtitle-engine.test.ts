@@ -27,9 +27,10 @@ describe('formatTimestamp', () => {
 		expect(formatTimestamp(3599.9996, 'vtt')).toBe('01:00:00.000');
 	});
 
-	it('clamps negative and non-finite inputs to zero', () => {
+	it('clamps negative inputs to zero and rejects non-finite inputs', () => {
 		expect(formatTimestamp(-4.25, 'srt')).toBe('00:00:00,000');
-		expect(formatTimestamp(Number.NaN, 'vtt')).toBe('00:00:00.000');
+		expect(() => formatTimestamp(Number.NaN, 'vtt')).toThrow(RangeError);
+		expect(() => formatTimestamp(Number.POSITIVE_INFINITY, 'srt')).toThrow(RangeError);
 		expect(formatTimestamp(3723.045, 'srt')).toBe('01:02:03,045');
 	});
 });

@@ -1,4 +1,6 @@
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { expect, type Download, type Locator, type Page, test } from '@playwright/test';
 
 async function readOutputText(locator: Locator): Promise<string> {
 	return locator.evaluate((el) => {
@@ -7,6 +9,16 @@ async function readOutputText(locator: Locator): Promise<string> {
 		}
 		return el.textContent ?? '';
 	});
+}
+
+async function readDownloadText(download: Download): Promise<string> {
+	const stream = await download.createReadStream();
+	expect(stream).not.toBeNull();
+	const chunks: Buffer[] = [];
+	for await (const chunk of stream!) {
+		chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+	}
+	return Buffer.concat(chunks).toString('utf8');
 }
 
 function extractCueTextLines(srtText: string): string[] {
@@ -272,6 +284,79 @@ test.describe('Whisper JSON to SRT converter journeys', () => {
 		await page.getByTestId('load-sample-btn').click();
 		await expect(statusBanner).toHaveAttribute('data-status', 'ok');
 		await expect.poll(() => readOutputText(subtitleOutput)).toContain('-->');
+	});
+
+	test('reports timeline QC for pasted and uploaded payloads and keeps exports explicit', async ({
+		page,
+	}) => {
+		const mixed = readFileSync(
+			path.resolve(process.cwd(), 'tests/fixtures/qc/mixed-defects.json'),
+			'utf8',
+		);
+		const overlapFixture = readFileSync(
+			path.resolve(process.cwd(), 'tests/fixtures/qc/upload-overlap.json'),
+			'utf8',
+		);
+
+		await page.goto('/');
+		const qcSummary = page.getByTestId('timeline-qc-summary');
+		const qcIssues = page.getByTestId('timeline-qc-issues');
+		const subtitleOutput = page.getByTestId('subtitle-output');
+		await expect(qcSummary).toHaveAttribute('data-qc-state', 'clean');
+
+		await page.getByTestId('json-input').fill(mixed);
+		await expect(page.getByTestId('status-banner')).toHaveAttribute('data-status', 'ok');
+		await expect(qcSummary).toHaveAttribute('data-qc-state', 'error');
+		await expect(qcSummary).toHaveAttribute('data-qc-errors', /[1-9]/);
+		await expect(qcSummary).toHaveAttribute('data-qc-omitted-segments', '3');
+		await expect(qcIssues).toContainText('[invalid-time]');
+		await expect(qcIssues).toContainText('[reversed-range]');
+		await expect(qcIssues).toContainText('[overlap]');
+		await expect(qcIssues).toContainText('[empty-segment]');
+
+		const outputBeforeExport = await readOutputText(subtitleOutput);
+		expect(outputBeforeExport).not.toContain('PRIVATE_TRANSCRIPT_MARKER');
+		expect(outputBeforeExport).not.toContain('00:00:00,000 --> 00:00:00,000');
+		expect(outputBeforeExport).toContain('00:00:08,000 --> 00:00:06,500');
+
+		await page.getByTestId('copy-output-btn').click();
+		const exportStatus = page.getByTestId('export-status');
+		await expect(exportStatus).toBeVisible();
+		await expect(exportStatus).toHaveAttribute('data-export-risk', 'true');
+		await expect(exportStatus).toContainText(/timeline QC/i);
+
+		const srtDownloadPromise = page.waitForEvent('download');
+		await page.getByTestId('download-output-btn').click();
+		const srtDownload = await srtDownloadPromise;
+		const downloadedSrt = await readDownloadText(srtDownload);
+		expect(downloadedSrt.trim()).toBe(outputBeforeExport.trim());
+
+		const qcDownloadPromise = page.waitForEvent('download');
+		await page.getByTestId('qc-report-download-btn').click();
+		const qcDownload = await qcDownloadPromise;
+		expect(qcDownload.suggestedFilename()).toMatch(/\.qc\.txt$/i);
+		const qcReportText = await readDownloadText(qcDownload);
+		expect(qcReportText).toContain('Timeline QC report');
+		expect(qcReportText).toContain('[overlap]');
+		expect(qcReportText).not.toContain('PRIVATE_TRANSCRIPT_MARKER');
+		expect(qcReportText).not.toContain('CLEAN_OPENING_LINE');
+
+		await page.getByTestId('file-upload').setInputFiles({
+			name: 'qc-overlap.json',
+			mimeType: 'application/json',
+			buffer: Buffer.from(overlapFixture, 'utf8'),
+		});
+		await expect(qcSummary).toHaveAttribute('data-qc-state', 'warning');
+		await expect(qcIssues).toContainText('[overlap]');
+		const uploadedOutput = await readOutputText(subtitleOutput);
+		expect(uploadedOutput).toContain('UPLOAD_OVERLAP_FIRST');
+		expect(uploadedOutput).toContain('UPLOAD_OVERLAP_SECOND');
+
+		await page.setViewportSize({ width: 375, height: 812 });
+		await page.getByTestId('json-input').fill(mixed);
+		await expect(qcSummary).toHaveAttribute('data-qc-state', 'error');
+		const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+		expect(scrollWidth).toBeLessThanOrEqual(375);
 	});
 
 	test('records GA4 config and subtitle_export in window.dataLayer with zero external network requests', async ({

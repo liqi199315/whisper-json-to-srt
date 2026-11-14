@@ -3,6 +3,742 @@
 // src/cli.ts
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
+// src/lib/timeline-qc.ts
+var EPSILON = 1e-9;
+var OVERLAP_TOLERANCE_SEC = 1e-6;
+function isRepresentableSeconds(seconds) {
+  if (!Number.isFinite(seconds)) return false;
+  const milliseconds = Math.round(seconds * 1e3);
+  return Number.isFinite(milliseconds) && Math.abs(milliseconds) <= Number.MAX_SAFE_INTEGER;
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function describeValue(value) {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  if (value === void 0) return "missing";
+  return typeof value;
+}
+function describeKind(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? "a number" : "a non-finite number";
+  }
+  if (typeof value === "string") return "a string";
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  return typeof value;
+}
+function failureNote(required, unit) {
+  if (required) return " The segment was omitted from the subtitle output.";
+  if (unit === "word") return " Word timing was interpolated from nearby words.";
+  return " The value was ignored in favour of a fallback timing source.";
+}
+function inspectTime(raw, options) {
+  const { scale, index, field, required, unit, context } = options;
+  const prefix = context ? `${context} ${field}` : `${unit.charAt(0).toUpperCase()}${unit.slice(1)} ${index} ${field}`;
+  if (raw === void 0 || raw === null) {
+    if (!required) return { seconds: null, omitted: false };
+    return {
+      seconds: null,
+      omitted: true,
+      issue: {
+        code: "invalid-time",
+        severity: "error",
+        scope: "segment",
+        index,
+        field,
+        value: describeValue(raw),
+        message: `${prefix} is ${describeValue(raw)}.${failureNote(required, unit)}`
+      }
+    };
+  }
+  if (typeof raw !== "number") {
+    return {
+      seconds: null,
+      omitted: required,
+      issue: {
+        code: "invalid-time",
+        severity: required ? "error" : "warning",
+        scope: "segment",
+        index,
+        field,
+        value: describeValue(raw),
+        message: `${prefix} is ${describeKind(raw)} (${describeValue(raw)}), not a JSON number.${failureNote(required, unit)}`
+      }
+    };
+  }
+  if (!Number.isFinite(raw)) {
+    return {
+      seconds: null,
+      omitted: required,
+      issue: {
+        code: "invalid-time",
+        severity: required ? "error" : "warning",
+        scope: "segment",
+        index,
+        field,
+        value: String(raw),
+        message: `${prefix} is ${String(raw)}, which is not a finite number.${failureNote(required, unit)}`
+      }
+    };
+  }
+  const seconds = raw * scale;
+  if (!isRepresentableSeconds(seconds)) {
+    return {
+      seconds: null,
+      omitted: required,
+      issue: {
+        code: "unrepresentable-time",
+        severity: required ? "error" : "warning",
+        scope: "segment",
+        index,
+        field,
+        value: String(raw),
+        message: `${prefix} is ${String(raw)}, which overflows a millisecond subtitle timestamp.${failureNote(required, unit)}`
+      }
+    };
+  }
+  if (seconds < 0) {
+    if (!required) {
+      return {
+        seconds: null,
+        omitted: false,
+        issue: {
+          code: "negative-time",
+          severity: "warning",
+          scope: "segment",
+          index,
+          field,
+          value: String(raw),
+          message: `${prefix} is ${String(raw)} seconds before zero.${failureNote(required, unit)}`
+        }
+      };
+    }
+    return {
+      seconds: 0,
+      omitted: false,
+      issue: {
+        code: "negative-time",
+        severity: "warning",
+        scope: "segment",
+        index,
+        field,
+        value: String(raw),
+        message: `${prefix} is ${String(raw)}. It was clamped to 0.000 s in the subtitle output.`
+      }
+    };
+  }
+  return { seconds, omitted: false };
+}
+function compareRange(start, end, index, context) {
+  if (start === null || end === null) return void 0;
+  if (end < start - EPSILON) {
+    return {
+      code: "reversed-range",
+      severity: "warning",
+      scope: "segment",
+      index,
+      field: "range",
+      value: `${start} -> ${end}`,
+      message: `${context} ends at ${end} s before it starts at ${start} s. Timing was left unchanged for review.`
+    };
+  }
+  if (Math.abs(end - start) < EPSILON) {
+    return {
+      code: "zero-duration",
+      severity: "info",
+      scope: "segment",
+      index,
+      field: "range",
+      value: `${start} -> ${end}`,
+      message: `${context} has zero duration at ${start} s. Timing was left unchanged for review.`
+    };
+  }
+  return void 0;
+}
+function pushIssue(issues, issue) {
+  if (issue) issues.push(issue);
+}
+function readUnitText(item) {
+  const candidates = [item.text, item.transcript];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+function countWords(item) {
+  if (!Array.isArray(item.words)) return 0;
+  let count = 0;
+  for (const word of item.words) {
+    if (!isRecord(word)) continue;
+    if (typeof word.word === "string" && word.word.trim().length > 0) {
+      count += 1;
+    } else if (typeof word.text === "string" && word.text.trim().length > 0) {
+      count += 1;
+    }
+  }
+  return count;
+}
+function scanWhisperSegments(root) {
+  const issues = [];
+  const omitted = /* @__PURE__ */ new Set();
+  let checked = 0;
+  let anyNestedWords = false;
+  const segments = Array.isArray(root.segments) ? root.segments : [];
+  segments.forEach((item, idx) => {
+    if (!isRecord(item)) return;
+    const index = idx + 1;
+    checked += 1;
+    const start = inspectTime(item.start, {
+      scale: 1,
+      index,
+      field: "start",
+      required: true,
+      unit: "segment"
+    });
+    const end = inspectTime(item.end, {
+      scale: 1,
+      index,
+      field: "end",
+      required: true,
+      unit: "segment"
+    });
+    pushIssue(issues, start.issue);
+    pushIssue(issues, end.issue);
+    if (start.omitted || end.omitted) omitted.add(index);
+    pushIssue(
+      issues,
+      compareRange(start.seconds, end.seconds, index, `Segment ${index}`)
+    );
+    if (Array.isArray(item.words)) {
+      if (countWords(item) > 0) anyNestedWords = true;
+      item.words.forEach((word, wordIdx) => {
+        if (!isRecord(word)) return;
+        const wordStart = inspectTime(word.start, {
+          scale: 1,
+          index,
+          field: `words[${wordIdx + 1}].start`,
+          required: false,
+          unit: "word",
+          context: `Segment ${index}`
+        });
+        const wordEnd = inspectTime(word.end, {
+          scale: 1,
+          index,
+          field: `words[${wordIdx + 1}].end`,
+          required: false,
+          unit: "word",
+          context: `Segment ${index}`
+        });
+        pushIssue(issues, wordStart.issue);
+        pushIssue(issues, wordEnd.issue);
+        pushIssue(
+          issues,
+          compareRange(
+            wordStart.seconds,
+            wordEnd.seconds,
+            index,
+            `Segment ${index} word ${wordIdx + 1}`
+          )
+        );
+      });
+    }
+    if (!readUnitText(item) && countWords(item) === 0) {
+      omitted.add(index);
+      issues.push({
+        code: "empty-segment",
+        severity: "warning",
+        scope: "segment",
+        index,
+        field: "text",
+        message: `Segment ${index} has no caption text and no words. The segment was omitted from the subtitle output.`
+      });
+    }
+  });
+  const topWords = Array.isArray(root.words) ? root.words : Array.isArray(root.word_segments) ? root.word_segments : null;
+  if (!anyNestedWords && topWords) {
+    topWords.forEach((word, wordIdx) => {
+      if (!isRecord(word)) return;
+      const wordStart = inspectTime(word.start, {
+        scale: 1,
+        index: wordIdx + 1,
+        field: "start",
+        required: false,
+        unit: "word",
+        context: `Top-level word ${wordIdx + 1}`
+      });
+      const wordEnd = inspectTime(word.end, {
+        scale: 1,
+        index: wordIdx + 1,
+        field: "end",
+        required: false,
+        unit: "word",
+        context: `Top-level word ${wordIdx + 1}`
+      });
+      pushIssue(issues, wordStart.issue);
+      pushIssue(issues, wordEnd.issue);
+      pushIssue(
+        issues,
+        compareRange(
+          wordStart.seconds,
+          wordEnd.seconds,
+          wordIdx + 1,
+          `Top-level word ${wordIdx + 1}`
+        )
+      );
+    });
+  }
+  return { issues, checkedSegments: checked, omittedSegments: omitted.size };
+}
+var TIMESTAMP_RE = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,3}))?$/;
+function parseTimestampSeconds(value) {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(TIMESTAMP_RE);
+  if (!match) return null;
+  const hours = match[1] ? Number(match[1]) : 0;
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  const millis = match[4] ? Number(match[4].padEnd(3, "0")) : 0;
+  const total = hours * 3600 + minutes * 60 + seconds + millis / 1e3;
+  return Number.isFinite(total) ? total : null;
+}
+function scanWhisperCpp(root) {
+  const issues = [];
+  const omitted = /* @__PURE__ */ new Set();
+  let checked = 0;
+  const items = Array.isArray(root.transcription) ? root.transcription : [];
+  items.forEach((item, idx) => {
+    if (!isRecord(item)) return;
+    const index = idx + 1;
+    checked += 1;
+    let start = null;
+    let end = null;
+    let offsetIssue;
+    if (isRecord(item.offsets)) {
+      const from = inspectTime(item.offsets.from, {
+        scale: 1e-3,
+        index,
+        field: "offsets.from",
+        required: false,
+        unit: "segment"
+      });
+      const to = inspectTime(item.offsets.to, {
+        scale: 1e-3,
+        index,
+        field: "offsets.to",
+        required: false,
+        unit: "segment"
+      });
+      if (from.seconds !== null && to.seconds !== null) {
+        start = from.seconds;
+        end = to.seconds;
+      } else {
+        offsetIssue = from.issue ?? to.issue;
+      }
+    }
+    if (start === null || end === null) {
+      const fromTs = parseTimestampSeconds(isRecord(item.timestamps) ? item.timestamps.from : void 0);
+      const toTs = parseTimestampSeconds(isRecord(item.timestamps) ? item.timestamps.to : void 0);
+      if (fromTs !== null && toTs !== null) {
+        start = fromTs;
+        end = toTs;
+        if (offsetIssue) {
+          issues.push({
+            ...offsetIssue,
+            severity: "warning",
+            message: `${offsetIssue.message} Timestamp strings were used instead.`
+          });
+        }
+      } else {
+        omitted.add(index);
+        if (offsetIssue) {
+          issues.push({
+            ...offsetIssue,
+            severity: "error",
+            message: `${offsetIssue.message} No timestamp fallback was readable, so the segment was omitted from the subtitle output.`
+          });
+        } else {
+          issues.push({
+            code: "invalid-time",
+            severity: "error",
+            scope: "segment",
+            index,
+            field: "offsets",
+            message: `Segment ${index} has neither readable millisecond offsets nor timestamp strings. The segment was omitted from the subtitle output.`
+          });
+        }
+      }
+    }
+    pushIssue(issues, compareRange(start, end, index, `Segment ${index}`));
+    if (!readUnitText(item)) {
+      omitted.add(index);
+      issues.push({
+        code: "empty-segment",
+        severity: "warning",
+        scope: "segment",
+        index,
+        field: "text",
+        message: `Segment ${index} has no caption text. The segment was omitted from the subtitle output.`
+      });
+    }
+  });
+  return { issues, checkedSegments: checked, omittedSegments: omitted.size };
+}
+function scanDeepgram(root) {
+  const results = isRecord(root.results) ? root.results : {};
+  const utterances = Array.isArray(results.utterances) ? results.utterances : [];
+  if (utterances.length > 0) {
+    const issues = [];
+    const omitted = /* @__PURE__ */ new Set();
+    utterances.forEach((item, idx) => {
+      if (!isRecord(item)) return;
+      const index = idx + 1;
+      const start = inspectTime(item.start, {
+        scale: 1,
+        index,
+        field: "start",
+        required: true,
+        unit: "utterance"
+      });
+      const end = inspectTime(item.end, {
+        scale: 1,
+        index,
+        field: "end",
+        required: true,
+        unit: "utterance"
+      });
+      pushIssue(issues, start.issue);
+      pushIssue(issues, end.issue);
+      if (start.omitted || end.omitted) omitted.add(index);
+      pushIssue(issues, compareRange(start.seconds, end.seconds, index, `Utterance ${index}`));
+      if (!readUnitText(item) && countWords(item) === 0) {
+        omitted.add(index);
+        issues.push({
+          code: "empty-segment",
+          severity: "warning",
+          scope: "segment",
+          index,
+          field: "text",
+          message: `Utterance ${index} has no transcript text. The utterance was omitted from the subtitle output.`
+        });
+      }
+    });
+    return { issues, checkedSegments: utterances.length, omittedSegments: omitted.size };
+  }
+  const channels = Array.isArray(results.channels) ? results.channels : [];
+  const firstChannel = isRecord(channels[0]) ? channels[0] : {};
+  const alternatives = Array.isArray(firstChannel.alternatives) ? firstChannel.alternatives : [];
+  const firstAlt = isRecord(alternatives[0]) ? alternatives[0] : {};
+  const words = Array.isArray(firstAlt.words) ? firstAlt.words : [];
+  if (words.length > 0) {
+    return scanWordList(words, 1, "channel word");
+  }
+  return { issues: [], checkedSegments: 1, omittedSegments: 0 };
+}
+function scanWordList(words, scale, label) {
+  const issues = [];
+  words.forEach((item, idx) => {
+    if (!isRecord(item)) return;
+    const index = idx + 1;
+    const start = inspectTime(item.start, {
+      scale,
+      index,
+      field: "start",
+      required: false,
+      unit: "word",
+      context: `${label} ${index}`
+    });
+    const end = inspectTime(item.end, {
+      scale,
+      index,
+      field: "end",
+      required: false,
+      unit: "word",
+      context: `${label} ${index}`
+    });
+    pushIssue(issues, start.issue);
+    pushIssue(issues, end.issue);
+    pushIssue(issues, compareRange(start.seconds, end.seconds, index, `${label} ${index}`));
+  });
+  return { issues, checkedSegments: words.length, omittedSegments: 0 };
+}
+function scanAssemblyAi(root) {
+  const utterances = Array.isArray(root.utterances) ? root.utterances : [];
+  if (utterances.length > 0) {
+    const issues = [];
+    const omitted = /* @__PURE__ */ new Set();
+    utterances.forEach((item, idx) => {
+      if (!isRecord(item)) return;
+      const index = idx + 1;
+      const start = inspectTime(item.start, {
+        scale: 1e-3,
+        index,
+        field: "start",
+        required: true,
+        unit: "utterance"
+      });
+      const end = inspectTime(item.end, {
+        scale: 1e-3,
+        index,
+        field: "end",
+        required: true,
+        unit: "utterance"
+      });
+      pushIssue(issues, start.issue);
+      pushIssue(issues, end.issue);
+      if (start.omitted || end.omitted) omitted.add(index);
+      pushIssue(issues, compareRange(start.seconds, end.seconds, index, `Utterance ${index}`));
+      if (!readUnitText(item) && countWords(item) === 0) {
+        omitted.add(index);
+        issues.push({
+          code: "empty-segment",
+          severity: "warning",
+          scope: "segment",
+          index,
+          field: "text",
+          message: `Utterance ${index} has no transcript text. The utterance was omitted from the subtitle output.`
+        });
+      }
+    });
+    return { issues, checkedSegments: utterances.length, omittedSegments: omitted.size };
+  }
+  const words = Array.isArray(root.words) ? root.words : [];
+  if (words.length > 0) {
+    const scale = typeof root.audio_duration === "number" || typeof root.acoustic_model === "string" || typeof root.language_model === "string" ? 1e-3 : 1;
+    return scanWordList(words, scale, "Word");
+  }
+  return { issues: [], checkedSegments: 0, omittedSegments: 0 };
+}
+function hasCapCutText(content) {
+  if (isRecord(content) && typeof content.text === "string") {
+    return content.text.trim().length > 0;
+  }
+  if (typeof content === "string") return content.trim().length > 0;
+  return false;
+}
+function scanCapCut(root) {
+  const issues = [];
+  const omitted = /* @__PURE__ */ new Set();
+  const materials = isRecord(root.materials) ? root.materials : {};
+  const texts = Array.isArray(materials.texts) ? materials.texts : [];
+  const textById = /* @__PURE__ */ new Map();
+  for (const item of texts) {
+    if (!isRecord(item) || typeof item.id !== "string") continue;
+    if (hasCapCutText(item.content)) textById.set(item.id, item.id);
+  }
+  let index = 0;
+  const tracks = Array.isArray(root.tracks) ? root.tracks : [];
+  for (const track of tracks) {
+    if (!isRecord(track) || !Array.isArray(track.segments)) continue;
+    for (const segment of track.segments) {
+      if (!isRecord(segment) || typeof segment.material_id !== "string") continue;
+      if (!textById.has(segment.material_id)) continue;
+      index += 1;
+      const range = isRecord(segment.target_timerange) ? segment.target_timerange : null;
+      if (!range) {
+        omitted.add(index);
+        issues.push({
+          code: "invalid-time",
+          severity: "error",
+          scope: "segment",
+          index,
+          field: "target_timerange",
+          message: `Segment ${index} has no target_timerange. The segment was omitted from the subtitle output.`
+        });
+        continue;
+      }
+      const start = inspectTime(range.start, {
+        scale: 1e-6,
+        index,
+        field: "target_timerange.start",
+        required: true,
+        unit: "segment"
+      });
+      const duration = inspectTime(range.duration, {
+        scale: 1e-6,
+        index,
+        field: "target_timerange.duration",
+        required: true,
+        unit: "segment"
+      });
+      pushIssue(issues, start.issue);
+      pushIssue(issues, duration.issue);
+      if (start.omitted || duration.omitted) omitted.add(index);
+      if (start.seconds !== null && duration.seconds !== null) {
+        pushIssue(
+          issues,
+          compareRange(start.seconds, start.seconds + duration.seconds, index, `Segment ${index}`)
+        );
+      }
+    }
+  }
+  return { issues, checkedSegments: index, omittedSegments: omitted.size };
+}
+function scanTimelineInput(root) {
+  if (Array.isArray(root.transcription)) {
+    return scanWhisperCpp(root);
+  }
+  if (isRecord(root.results)) {
+    return scanDeepgram(root);
+  }
+  if (Array.isArray(root.utterances)) {
+    return scanAssemblyAi(root);
+  }
+  if (isRecord(root.materials) && Array.isArray(root.materials.texts) && Array.isArray(root.tracks)) {
+    return scanCapCut(root);
+  }
+  if (Array.isArray(root.segments)) {
+    return scanWhisperSegments(root);
+  }
+  if (Array.isArray(root.words)) {
+    const scale = typeof root.audio_duration === "number" || typeof root.acoustic_model === "string" || typeof root.language_model === "string" ? 1e-3 : 1;
+    return scanWordList(root.words, scale, "Word");
+  }
+  if (Array.isArray(root.word_segments)) {
+    return scanWordList(root.word_segments, 1, "Word");
+  }
+  return { issues: [], checkedSegments: 0, omittedSegments: 0 };
+}
+function scanRawJsonText(raw) {
+  try {
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, ""));
+    if (!isRecord(parsed)) return { issues: [], checkedSegments: 0, omittedSegments: 0 };
+    return scanTimelineInput(parsed);
+  } catch {
+    return { issues: [], checkedSegments: 0, omittedSegments: 0 };
+  }
+}
+function analyzeCues(cues) {
+  const issues = [];
+  for (let i = 0; i < cues.length; i++) {
+    const cue = cues[i];
+    if (!isRepresentableSeconds(cue.startSec) || !isRepresentableSeconds(cue.endSec)) {
+      issues.push({
+        code: "invalid-time",
+        severity: "error",
+        scope: "cue",
+        index: cue.index,
+        field: "range",
+        value: `${cue.startSec} -> ${cue.endSec}`,
+        message: `Cue ${cue.index} has a non-finite or unrepresentable time range. It was omitted from the subtitle output.`
+      });
+    }
+    if (cue.lines.every((line) => line.trim().length === 0)) {
+      issues.push({
+        code: "empty-cue",
+        severity: "warning",
+        scope: "cue",
+        index: cue.index,
+        field: "text",
+        message: `Cue ${cue.index} has no visible text.`
+      });
+    }
+    if (cue.endSec < cue.startSec - EPSILON) {
+      issues.push({
+        code: "reversed-range",
+        severity: "warning",
+        scope: "cue",
+        index: cue.index,
+        field: "range",
+        value: `${cue.startSec} -> ${cue.endSec}`,
+        message: `Cue ${cue.index} ends at ${cue.endSec} s before it starts at ${cue.startSec} s. Timing was left unchanged for review.`
+      });
+    } else if (Math.abs(cue.endSec - cue.startSec) < EPSILON) {
+      issues.push({
+        code: "zero-duration",
+        severity: "info",
+        scope: "cue",
+        index: cue.index,
+        field: "range",
+        value: `${cue.startSec} -> ${cue.endSec}`,
+        message: `Cue ${cue.index} has zero duration at ${cue.startSec} s. Timing was left unchanged for review.`
+      });
+    }
+    if (i > 0) {
+      const prev = cues[i - 1];
+      const overlapSec = prev.endSec - cue.startSec;
+      if (overlapSec > OVERLAP_TOLERANCE_SEC) {
+        issues.push({
+          code: "overlap",
+          severity: "warning",
+          scope: "cue",
+          index: cue.index,
+          field: "start",
+          value: overlapSec.toFixed(3),
+          relatedIndex: prev.index,
+          message: `Cue ${cue.index} starts ${overlapSec.toFixed(3)} s before cue ${prev.index} ends. Timing was left unchanged for review.`
+        });
+      }
+    }
+  }
+  return issues;
+}
+var SEVERITY_RANK = { error: 0, warning: 1, info: 2 };
+function buildQcReport(input) {
+  const issues = [...input.issues].sort((a, b) => {
+    const severity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+    if (severity !== 0) return severity;
+    if (a.scope !== b.scope) return a.scope === "segment" ? -1 : 1;
+    if (a.index !== b.index) return a.index - b.index;
+    return a.code.localeCompare(b.code);
+  });
+  let errorCount = 0;
+  let warningCount = 0;
+  let infoCount = 0;
+  for (const issue of issues) {
+    if (issue.severity === "error") errorCount += 1;
+    else if (issue.severity === "warning") warningCount += 1;
+    else infoCount += 1;
+  }
+  const status = errorCount > 0 ? "error" : warningCount > 0 ? "warning" : "clean";
+  const summary = status === "clean" ? infoCount > 0 ? `Timeline QC: clean with ${infoCount} note(s) (${input.emittedCues} cues checked).` : `Timeline QC: clean (${input.emittedCues} cues checked).` : `Timeline QC: ${errorCount} error(s), ${warningCount} warning(s), ${infoCount} note(s); ${input.omittedSegments} segment(s) and ${input.omittedCues} cue(s) omitted.`;
+  return {
+    status,
+    checkedSegments: input.checkedSegments,
+    emittedCues: input.emittedCues,
+    omittedSegments: input.omittedSegments,
+    omittedCues: input.omittedCues,
+    errorCount,
+    warningCount,
+    infoCount,
+    issues,
+    summary
+  };
+}
+function formatQcReport(report) {
+  const lines = [
+    "Timeline QC report",
+    `Status: ${report.status}`,
+    `Emitted cues: ${report.emittedCues}`,
+    `Segments checked: ${report.checkedSegments}`,
+    `Omitted segments: ${report.omittedSegments}`,
+    `Omitted cues: ${report.omittedCues}`,
+    `Errors: ${report.errorCount}`,
+    `Warnings: ${report.warningCount}`,
+    `Notes: ${report.infoCount}`,
+    ""
+  ];
+  if (report.issues.length === 0) {
+    lines.push("No timeline QC issues detected.");
+    return `${lines.join("\n")}
+`;
+  }
+  lines.push(`Issues (${report.issues.length}):`);
+  for (const issue of report.issues) {
+    const location = issue.scope === "cue" ? `cue ${issue.index}${issue.relatedIndex !== void 0 ? ` (related cue ${issue.relatedIndex})` : ""}` : `segment ${issue.index}`;
+    const field = issue.field ? ` ${issue.field}` : "";
+    const value = issue.value !== void 0 ? ` value=${issue.value}` : "";
+    lines.push(`- [${issue.code}] ${issue.severity} ${location}${field}${value}: ${issue.message}`);
+  }
+  return `${lines.join("\n")}
+`;
+}
+
 // src/lib/subtitle-engine.ts
 var DIALECT_LABELS = {
   "openai-verbose-json": "OpenAI Whisper verbose_json",
@@ -19,11 +755,16 @@ var NO_LEADING_SPACE_PUNCT_RE = /^[,.;:!?%)\]}>，。！？；：、）》」』
 function roundMicro(value) {
   return Math.round(value * 1e6) / 1e6;
 }
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function toFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function toTimelineNumber(value) {
+  const number = toFiniteNumber(value);
+  if (number === null) return null;
+  return isRepresentableSeconds(number) ? number : null;
 }
 function normalizeSpeaker(value) {
   if (typeof value === "string") {
@@ -43,7 +784,8 @@ function parseTimestampString(value) {
   const minutes = Number(match[2]);
   const seconds = Number(match[3]);
   const millis = match[4] ? Number(match[4].padEnd(3, "0")) : 0;
-  return hours * 3600 + minutes * 60 + seconds + millis / 1e3;
+  const total = hours * 3600 + minutes * 60 + seconds + millis / 1e3;
+  return Number.isFinite(total) ? total : null;
 }
 function isCjkChar(char) {
   return char.length > 0 && CJK_CHAR_RE.test(char);
@@ -94,11 +836,11 @@ function extractWordToken(record) {
 function normalizeWords(rawWords, scaleToSec, fallbackSpeaker, bounds) {
   const drafts = [];
   for (const item of rawWords) {
-    if (!isRecord(item)) continue;
+    if (!isRecord2(item)) continue;
     const word = extractWordToken(item);
     if (!word) continue;
-    const rawStart = toFiniteNumber(item.start);
-    const rawEnd = toFiniteNumber(item.end);
+    const rawStart = toTimelineNumber(item.start);
+    const rawEnd = toTimelineNumber(item.end);
     if (rawStart === null && rawEnd === null && !bounds) continue;
     const startSec = rawStart !== null ? Math.max(0, rawStart * scaleToSec) : null;
     const endSec = rawEnd !== null ? Math.max(0, rawEnd * scaleToSec) : null;
@@ -225,13 +967,13 @@ function assignWordsToSegments(segments, topWords) {
 function hasStringSpeakerInWhisperPayload(root) {
   if (!Array.isArray(root.segments)) return false;
   for (const item of root.segments) {
-    if (!isRecord(item)) continue;
+    if (!isRecord2(item)) continue;
     if (typeof item.speaker === "string" && item.speaker.trim().length > 0) {
       return true;
     }
     if (Array.isArray(item.words)) {
       for (const w of item.words) {
-        if (isRecord(w) && typeof w.speaker === "string" && w.speaker.trim().length > 0) {
+        if (isRecord2(w) && typeof w.speaker === "string" && w.speaker.trim().length > 0) {
           return true;
         }
       }
@@ -241,7 +983,7 @@ function hasStringSpeakerInWhisperPayload(root) {
   for (const list of extraWordLists) {
     if (!Array.isArray(list)) continue;
     for (const w of list) {
-      if (isRecord(w) && typeof w.speaker === "string" && w.speaker.trim().length > 0) {
+      if (isRecord2(w) && typeof w.speaker === "string" && w.speaker.trim().length > 0) {
         return true;
       }
     }
@@ -259,7 +1001,7 @@ function isAssemblyAiWordsPayload(root, rawWords) {
   let maxSpan = 0;
   let maxEnd = 0;
   for (const item of rawWords) {
-    if (!isRecord(item)) continue;
+    if (!isRecord2(item)) continue;
     const start = toFiniteNumber(item.start);
     const end = toFiniteNumber(item.end);
     if (start === null || end === null) continue;
@@ -278,17 +1020,17 @@ function isAssemblyAiWordsPayload(root, rawWords) {
   return usesTextField || maxSpan >= 40 || maxEnd >= 120;
 }
 function extractWhisperStyleSegments(root) {
-  const durationHintSec = toFiniteNumber(root.duration) ?? void 0;
+  const durationHintSec = toTimelineNumber(root.duration) ?? void 0;
   const rawSegments = Array.isArray(root.segments) ? root.segments : [];
   const segments = [];
   let anyNestedWords = false;
   for (const item of rawSegments) {
-    if (!isRecord(item)) continue;
-    const rawStart = toFiniteNumber(item.start);
-    const rawEnd = toFiniteNumber(item.end);
+    if (!isRecord2(item)) continue;
+    const rawStart = toTimelineNumber(item.start);
+    const rawEnd = toTimelineNumber(item.end);
     if (rawStart === null || rawEnd === null) continue;
     const startSec = roundMicro(Math.max(0, rawStart));
-    const endSec = roundMicro(Math.max(startSec, rawEnd));
+    const endSec = roundMicro(rawEnd);
     const speaker = normalizeSpeaker(item.speaker);
     const nestedWords = Array.isArray(item.words) ? normalizeWords(item.words, 1, speaker, { startSec, endSec }) : [];
     if (nestedWords.length > 0) anyNestedWords = true;
@@ -320,18 +1062,18 @@ function extractWhisperCppSegments(root) {
   const rawItems = Array.isArray(root.transcription) ? root.transcription : [];
   const segments = [];
   for (const item of rawItems) {
-    if (!isRecord(item)) continue;
+    if (!isRecord2(item)) continue;
     let startSec = null;
     let endSec = null;
-    if (isRecord(item.offsets)) {
-      const fromMs = toFiniteNumber(item.offsets.from);
-      const toMs = toFiniteNumber(item.offsets.to);
+    if (isRecord2(item.offsets)) {
+      const fromMs = toTimelineNumber(item.offsets.from);
+      const toMs = toTimelineNumber(item.offsets.to);
       if (fromMs !== null && toMs !== null) {
         startSec = fromMs / 1e3;
         endSec = toMs / 1e3;
       }
     }
-    if ((startSec === null || endSec === null) && isRecord(item.timestamps)) {
+    if ((startSec === null || endSec === null) && isRecord2(item.timestamps)) {
       const fromTs = parseTimestampString(item.timestamps.from);
       const toTs = parseTimestampString(item.timestamps.to);
       if (fromTs !== null && toTs !== null) {
@@ -343,7 +1085,7 @@ function extractWhisperCppSegments(root) {
     const text = typeof item.text === "string" ? item.text.replace(/\s+/g, " ").trim() : "";
     if (!text) continue;
     const safeStart = roundMicro(Math.max(0, startSec));
-    const safeEnd = roundMicro(Math.max(safeStart, endSec));
+    const safeEnd = roundMicro(endSec);
     const seg = { startSec: safeStart, endSec: safeEnd, text };
     const speaker = normalizeSpeaker(item.speaker);
     if (speaker) seg.speaker = speaker;
@@ -352,23 +1094,23 @@ function extractWhisperCppSegments(root) {
   return { segments };
 }
 function extractDeepgramSegments(root) {
-  const results = isRecord(root.results) ? root.results : {};
-  const metadata = isRecord(root.metadata) ? root.metadata : {};
-  const durationHintSec = toFiniteNumber(metadata.duration) ?? void 0;
+  const results = isRecord2(root.results) ? root.results : {};
+  const metadata = isRecord2(root.metadata) ? root.metadata : {};
+  const durationHintSec = toTimelineNumber(metadata.duration) ?? void 0;
   const channels = Array.isArray(results.channels) ? results.channels : [];
-  const firstChannel = isRecord(channels[0]) ? channels[0] : {};
+  const firstChannel = isRecord2(channels[0]) ? channels[0] : {};
   const alternatives = Array.isArray(firstChannel.alternatives) ? firstChannel.alternatives : [];
-  const firstAlt = isRecord(alternatives[0]) ? alternatives[0] : {};
+  const firstAlt = isRecord2(alternatives[0]) ? alternatives[0] : {};
   const channelWords = Array.isArray(firstAlt.words) ? normalizeWords(firstAlt.words, 1) : [];
   if (Array.isArray(results.utterances) && results.utterances.length > 0) {
     const segments = [];
     for (const utt of results.utterances) {
-      if (!isRecord(utt)) continue;
-      const rawStart = toFiniteNumber(utt.start);
-      const rawEnd = toFiniteNumber(utt.end);
+      if (!isRecord2(utt)) continue;
+      const rawStart = toTimelineNumber(utt.start);
+      const rawEnd = toTimelineNumber(utt.end);
       if (rawStart === null || rawEnd === null) continue;
       const startSec = roundMicro(Math.max(0, rawStart));
-      const endSec = roundMicro(Math.max(startSec, rawEnd));
+      const endSec = roundMicro(rawEnd);
       const speaker = normalizeSpeaker(utt.speaker);
       const uttWords = Array.isArray(utt.words) ? normalizeWords(utt.words, 1, speaker, { startSec, endSec }) : [];
       const rawTranscript = typeof utt.transcript === "string" ? utt.transcript.trim() : typeof utt.text === "string" ? utt.text.trim() : "";
@@ -389,21 +1131,21 @@ function extractDeepgramSegments(root) {
       };
     }
   }
-  if (isRecord(firstAlt.paragraphs) && Array.isArray(firstAlt.paragraphs.paragraphs)) {
+  if (isRecord2(firstAlt.paragraphs) && Array.isArray(firstAlt.paragraphs.paragraphs)) {
     const paraSegments = [];
     for (const para of firstAlt.paragraphs.paragraphs) {
-      if (!isRecord(para)) continue;
+      if (!isRecord2(para)) continue;
       const speaker = normalizeSpeaker(para.speaker);
       if (Array.isArray(para.sentences) && para.sentences.length > 0) {
         for (const sent of para.sentences) {
-          if (!isRecord(sent)) continue;
-          const sStart = toFiniteNumber(sent.start);
-          const sEnd = toFiniteNumber(sent.end);
+          if (!isRecord2(sent)) continue;
+          const sStart = toTimelineNumber(sent.start);
+          const sEnd = toTimelineNumber(sent.end);
           const sText = typeof sent.text === "string" ? sent.text.trim() : "";
           if (sStart === null || sEnd === null || !sText) continue;
           const seg = {
             startSec: roundMicro(Math.max(0, sStart)),
-            endSec: roundMicro(Math.max(0, sStart, sEnd)),
+            endSec: roundMicro(sEnd),
             text: sText
           };
           if (speaker) seg.speaker = speaker;
@@ -444,12 +1186,12 @@ function extractAssemblyAiSegments(root) {
   if (Array.isArray(root.utterances) && root.utterances.length > 0) {
     const segments = [];
     for (const utt of root.utterances) {
-      if (!isRecord(utt)) continue;
-      const rawStart = toFiniteNumber(utt.start);
-      const rawEnd = toFiniteNumber(utt.end);
+      if (!isRecord2(utt)) continue;
+      const rawStart = toTimelineNumber(utt.start);
+      const rawEnd = toTimelineNumber(utt.end);
       if (rawStart === null || rawEnd === null) continue;
       const startSec = roundMicro(Math.max(0, rawStart / 1e3));
-      const endSec = roundMicro(Math.max(startSec, rawEnd / 1e3));
+      const endSec = roundMicro(rawEnd / 1e3);
       const speaker = normalizeSpeaker(utt.speaker);
       const uttWords = Array.isArray(utt.words) ? normalizeWords(utt.words, 1e-3, speaker, { startSec, endSec }) : [];
       const rawText = typeof utt.text === "string" ? utt.text.trim() : "";
@@ -472,7 +1214,7 @@ function extractAssemblyAiSegments(root) {
   };
 }
 function readCapCutCaptionText(content) {
-  if (isRecord(content) && typeof content.text === "string") {
+  if (isRecord2(content) && typeof content.text === "string") {
     return content.text.replace(/\s+/g, " ").trim();
   }
   if (typeof content !== "string") return "";
@@ -481,7 +1223,7 @@ function readCapCutCaptionText(content) {
   if (trimmed.startsWith("{")) {
     try {
       const parsed = JSON.parse(trimmed);
-      if (isRecord(parsed) && typeof parsed.text === "string") {
+      if (isRecord2(parsed) && typeof parsed.text === "string") {
         return parsed.text.replace(/\s+/g, " ").trim();
       }
     } catch {
@@ -490,11 +1232,11 @@ function readCapCutCaptionText(content) {
   return trimmed.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 function extractCapCutDraftSegments(root) {
-  const materials = isRecord(root.materials) ? root.materials : {};
+  const materials = isRecord2(root.materials) ? root.materials : {};
   const texts = Array.isArray(materials.texts) ? materials.texts : [];
   const textById = /* @__PURE__ */ new Map();
   for (const item of texts) {
-    if (!isRecord(item) || typeof item.id !== "string" || item.id.length === 0) continue;
+    if (!isRecord2(item) || typeof item.id !== "string" || item.id.length === 0) continue;
     const text = readCapCutCaptionText(item.content);
     if (!text) continue;
     textById.set(item.id, text);
@@ -502,17 +1244,17 @@ function extractCapCutDraftSegments(root) {
   const tracks = Array.isArray(root.tracks) ? root.tracks : [];
   const segments = [];
   for (const track of tracks) {
-    if (!isRecord(track) || !Array.isArray(track.segments)) continue;
+    if (!isRecord2(track) || !Array.isArray(track.segments)) continue;
     for (const segment of track.segments) {
-      if (!isRecord(segment) || typeof segment.material_id !== "string") continue;
+      if (!isRecord2(segment) || typeof segment.material_id !== "string") continue;
       const text = textById.get(segment.material_id);
       if (!text) continue;
-      const range = isRecord(segment.target_timerange) ? segment.target_timerange : null;
-      const startUs = range ? toFiniteNumber(range.start) : null;
-      const durationUs = range ? toFiniteNumber(range.duration) : null;
+      const range = isRecord2(segment.target_timerange) ? segment.target_timerange : null;
+      const startUs = range ? toTimelineNumber(range.start) : null;
+      const durationUs = range ? toTimelineNumber(range.duration) : null;
       if (startUs === null || durationUs === null || durationUs < 0) continue;
       const startSec = roundMicro(Math.max(0, startUs / 1e6));
-      const endSec = roundMicro(Math.max(startSec, (startUs + durationUs) / 1e6));
+      const endSec = roundMicro((startUs + durationUs) / 1e6);
       segments.push({ startSec, endSec, text });
     }
   }
@@ -525,7 +1267,7 @@ function isOpenAiDiarizedJson(root) {
   let diarizedMarkers = 0;
   let nestedWordLists = 0;
   for (const item of root.segments) {
-    if (!isRecord(item)) continue;
+    if (!isRecord2(item)) continue;
     if (Array.isArray(item.words) && item.words.length > 0) nestedWordLists += 1;
     const start = toFiniteNumber(item.start);
     const end = toFiniteNumber(item.end);
@@ -564,7 +1306,7 @@ var DIALECT_ADAPTERS = [
   {
     id: "deepgram-nova",
     label: DIALECT_LABELS["deepgram-nova"],
-    matches: (root) => isRecord(root.results) && (Array.isArray(root.results.channels) || Array.isArray(root.results.utterances)),
+    matches: (root) => isRecord2(root.results) && (Array.isArray(root.results.channels) || Array.isArray(root.results.utterances)),
     extract: extractDeepgramSegments
   },
   {
@@ -576,7 +1318,7 @@ var DIALECT_ADAPTERS = [
   {
     id: "capcut-draft",
     label: DIALECT_LABELS["capcut-draft"],
-    matches: (root) => isRecord(root.materials) && Array.isArray(root.materials.texts) && Array.isArray(root.tracks),
+    matches: (root) => isRecord2(root.materials) && Array.isArray(root.materials.texts) && Array.isArray(root.tracks),
     extract: extractCapCutDraftSegments
   },
   {
@@ -599,7 +1341,10 @@ var DIALECT_ADAPTERS = [
   }
 ];
 function formatTimestamp(seconds, format) {
-  const clamped = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  if (!isRepresentableSeconds(seconds)) {
+    throw new RangeError(`Cannot format a non-finite or unrepresentable timestamp: ${String(seconds)}`);
+  }
+  const clamped = Math.max(0, seconds);
   const totalMs = Math.round(clamped * 1e3);
   const ms = totalMs % 1e3;
   const totalSeconds = Math.floor(totalMs / 1e3);
@@ -634,7 +1379,7 @@ function parseAsrJson(rawJsonText) {
       error: `Invalid JSON syntax (${detail}). Check for trailing commas or truncated brackets.`
     };
   }
-  if (!isRecord(parsedJson)) {
+  if (!isRecord2(parsedJson)) {
     return {
       ok: false,
       error: "Unrecognized JSON root shape. Expected an ASR JSON object with segments, words, transcription, results, or utterances."
@@ -742,7 +1487,7 @@ function tokenizeSegmentText(text, maxCharsPerLine) {
   flushAscii();
   return units;
 }
-function reflowCues(parsed, options) {
+function reflowCues(parsed, options, qc) {
   const maxCharsPerLine = Math.max(4, Math.floor(options.maxCharsPerLine || 42));
   const maxLinesPerCue = options.maxLinesPerCue === 1 ? 1 : 2;
   const maxCueDurationSec = options.maxCueDurationSec > 0 ? options.maxCueDurationSec : 5;
@@ -885,18 +1630,48 @@ function reflowCues(parsed, options) {
       }
     }
   }
-  return drafts.map((draft, idx) => {
-    const startSec = roundMicro(Math.max(0, draft.startSec + offsetSec));
-    const endSec = roundMicro(Math.max(startSec + 0.05, draft.endSec + offsetSec));
+  const cues = [];
+  for (const draft of drafts) {
+    const shiftedStart = draft.startSec + offsetSec;
+    const shiftedEnd = draft.endSec + offsetSec;
+    const cueIndex = cues.length + 1;
+    if (!isRepresentableSeconds(shiftedStart) || !isRepresentableSeconds(shiftedEnd) || !isRepresentableSeconds(roundMicro(shiftedStart)) || !isRepresentableSeconds(roundMicro(shiftedEnd))) {
+      qc?.({
+        code: "invalid-time",
+        severity: "error",
+        scope: "cue",
+        index: cueIndex,
+        field: "range",
+        value: `${String(shiftedStart)} -> ${String(shiftedEnd)}`,
+        message: `Cue ${cueIndex} has a non-finite or unrepresentable time range and was omitted from the subtitle output.`
+      });
+      continue;
+    }
+    let startSec = roundMicro(Math.max(0, shiftedStart));
+    let endSec = roundMicro(shiftedEnd);
+    if (offsetSec < 0 && (shiftedStart < 0 || shiftedEnd < 0)) {
+      const clampedEnd = Math.max(endSec, startSec + 0.05);
+      qc?.({
+        code: "offset-clamped",
+        severity: "info",
+        scope: "cue",
+        index: cueIndex,
+        field: "range",
+        value: `${roundMicro(shiftedStart)} -> ${roundMicro(shiftedEnd)}`,
+        message: `Offset ${offsetSec * 1e3} ms moved cue ${cueIndex} before 0.000 s. It was clamped to ${startSec.toFixed(3)} s - ${clampedEnd.toFixed(3)} s.`
+      });
+      endSec = roundMicro(clampedEnd);
+    }
     const cue = {
-      index: idx + 1,
+      index: cueIndex,
       startSec,
       endSec,
       lines: draft.lines
     };
     if (draft.speaker) cue.speaker = draft.speaker;
-    return cue;
-  });
+    cues.push(cue);
+  }
+  return cues;
 }
 function escapeCsvField(value) {
   if (/[",\r\n]/.test(value)) {
@@ -945,17 +1720,56 @@ ${body}`;
   return [header, ...rows].join("\n");
 }
 function convertAsrJson(rawJsonText, options) {
+  const scan = scanRawJsonText(rawJsonText);
   const parsed = parseAsrJson(rawJsonText);
   if (!parsed.ok) {
-    return { ok: false, error: parsed.error };
+    const qc2 = scan.issues.length > 0 ? buildQcReport({
+      issues: scan.issues,
+      checkedSegments: scan.checkedSegments,
+      emittedCues: 0,
+      omittedSegments: scan.omittedSegments,
+      omittedCues: 0
+    }) : void 0;
+    if (!qc2) {
+      return { ok: false, error: parsed.error };
+    }
+    const detail = qc2.issues.slice(0, 3).map((issue) => `[${issue.code}] ${issue.message}`).join(" ");
+    return {
+      ok: false,
+      error: `${parsed.error} Timeline QC rejected the candidate segments: ${detail}`,
+      qc: qc2
+    };
   }
-  const cues = reflowCues(parsed, options);
+  const qcIssues = [...scan.issues];
+  let omittedCues = 0;
+  const cues = reflowCues(parsed, options, (issue) => {
+    qcIssues.push(issue);
+    if (issue.code === "invalid-time" && issue.scope === "cue") {
+      omittedCues += 1;
+    }
+  });
+  qcIssues.push(...analyzeCues(cues));
+  const qc = buildQcReport({
+    issues: qcIssues,
+    checkedSegments: scan.checkedSegments,
+    emittedCues: cues.length,
+    omittedSegments: scan.omittedSegments,
+    omittedCues
+  });
+  if (cues.length === 0) {
+    return {
+      ok: false,
+      error: `Detected ${parsed.dialectLabel}, but timeline QC omitted every cue. ${qc.summary}`,
+      qc
+    };
+  }
   const output = serializeCues(cues, options.format);
   return {
     ok: true,
     parsed,
     cues,
-    output
+    output,
+    qc
   };
 }
 
@@ -977,6 +1791,7 @@ OPTIONS:
       --offset-ms <n>       Timestamp offset shift in milliseconds (default: 0)
       --speaker             Include [SPEAKER_XX] prefixes in cues
       --no-speaker          Omit speaker prefixes (default)
+      --fail-on-qc          Exit with code 3 without writing output when timeline QC reports errors
   -h, --help                Show this help message
   -v, --version             Show version number
 
@@ -992,7 +1807,8 @@ function parseCliArgs(args) {
     maxChars: 42,
     maxLines: 2,
     offsetMs: 0,
-    speaker: false
+    speaker: false,
+    failOnQc: false
   };
   let i = 0;
   while (i < args.length) {
@@ -1014,6 +1830,11 @@ function parseCliArgs(args) {
     }
     if (arg === "--no-speaker") {
       parsed.speaker = false;
+      i += 1;
+      continue;
+    }
+    if (arg === "--fail-on-qc") {
+      parsed.failOnQc = true;
       i += 1;
       continue;
     }
@@ -1205,9 +2026,23 @@ async function main(argv = process.argv.slice(2)) {
   };
   const result = convertAsrJson(jsonText, cueOptions);
   if (!result.ok) {
+    if (result.qc) {
+      process.stderr.write(`${formatQcReport(result.qc)}
+`);
+    }
     process.stderr.write(`Error: ${result.error}
 `);
     return 1;
+  }
+  if (result.qc.status !== "clean") {
+    process.stderr.write(`${formatQcReport(result.qc)}
+`);
+  }
+  if (options.failOnQc && result.qc.errorCount > 0) {
+    process.stderr.write(
+      "Error: Timeline QC reported errors; output was not written because --fail-on-qc is set.\n"
+    );
+    return 3;
   }
   const formattedOutput = result.output.endsWith("\n") ? result.output : `${result.output}
 `;

@@ -210,6 +210,32 @@ describe('json-to-srt CLI (bin/json-to-srt.mjs)', () => {
 		expect(withoutSpeaker).not.toContain('[SPEAKER_');
 	});
 
+	it('reports timeline QC on stderr and keeps degraded output explicit', async () => {
+		const fixturePath = path.resolve(__dirname, 'fixtures/qc/mixed-defects.json');
+		const { stdout, stderr } = await execFileAsync('node', [CLI_PATH, '--input', fixturePath]);
+
+		expect(stderr).toContain('Timeline QC report');
+		expect(stderr).toContain('[invalid-time]');
+		expect(stderr).toContain('[overlap]');
+		expect(stdout).toContain('REVERSED_RANGE_LINE');
+		expect(stdout).not.toContain('PRIVATE_TRANSCRIPT_MARKER');
+		expect(stdout).not.toContain('00:00:00,000 --> 00:00:00,000');
+	});
+
+	it('supports --fail-on-qc to refuse writing output when QC reports errors', async () => {
+		const fixturePath = path.resolve(__dirname, 'fixtures/qc/mixed-defects.json');
+		try {
+			await execFileAsync('node', [CLI_PATH, '--input', fixturePath, '--fail-on-qc']);
+			expect.fail('Should have exited with a QC failure');
+		} catch (err: unknown) {
+			const error = err as { code: number; stdout: string; stderr: string };
+			expect(error.code).toBe(3);
+			expect(error.stdout).toBe('');
+			expect(error.stderr).toContain('Timeline QC report');
+			expect(error.stderr).toContain('--fail-on-qc');
+		}
+	});
+
 	it('handles errors gracefully with non-zero exit code', async () => {
 		// Non-existent file
 		try {

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { convertAsrJson } from './lib/subtitle-engine';
+import { formatQcReport } from './lib/timeline-qc';
 import type { CueFormatOptions, OutputFormat } from './lib/types';
 
 export const CLI_VERSION = '0.1.0';
@@ -20,6 +21,7 @@ OPTIONS:
       --offset-ms <n>       Timestamp offset shift in milliseconds (default: 0)
       --speaker             Include [SPEAKER_XX] prefixes in cues
       --no-speaker          Omit speaker prefixes (default)
+      --fail-on-qc          Exit with code 3 without writing output when timeline QC reports errors
   -h, --help                Show this help message
   -v, --version             Show version number
 
@@ -38,6 +40,7 @@ export interface ParsedCliArgs {
 	maxLines: 1 | 2;
 	offsetMs: number;
 	speaker: boolean;
+	failOnQc: boolean;
 }
 
 export function parseCliArgs(args: string[]): ParsedCliArgs {
@@ -49,6 +52,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 		maxLines: 2,
 		offsetMs: 0,
 		speaker: false,
+		failOnQc: false,
 	};
 
 	let i = 0;
@@ -75,6 +79,12 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 
 		if (arg === '--no-speaker') {
 			parsed.speaker = false;
+			i += 1;
+			continue;
+		}
+
+		if (arg === '--fail-on-qc') {
+			parsed.failOnQc = true;
 			i += 1;
 			continue;
 		}
@@ -278,8 +288,22 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
 	const result = convertAsrJson(jsonText, cueOptions);
 	if (!result.ok) {
+		if (result.qc) {
+			process.stderr.write(`${formatQcReport(result.qc)}\n`);
+		}
 		process.stderr.write(`Error: ${result.error}\n`);
 		return 1;
+	}
+
+	if (result.qc.status !== 'clean') {
+		process.stderr.write(`${formatQcReport(result.qc)}\n`);
+	}
+
+	if (options.failOnQc && result.qc.errorCount > 0) {
+		process.stderr.write(
+			'Error: Timeline QC reported errors; output was not written because --fail-on-qc is set.\n',
+		);
+		return 3;
 	}
 
 	const formattedOutput = result.output.endsWith('\n') ? result.output : `${result.output}\n`;

@@ -171,6 +171,8 @@ const initialSample = SAMPLE_PAYLOADS[preset.defaultSampleId];
 const initialJson = initialSample.json;
 const initialBytes = new TextEncoder().encode(initialJson).byteLength;
 const initialResult = convertAsrJson(initialJson, preset.defaultOptions);
+const initialQc = initialResult.qc ?? null;
+const initialQcIssues = initialQc ? initialQc.issues.slice(0, 8) : [];
 const previewTimeFormat: 'srt' | 'vtt' = preset.defaultOptions.format === 'vtt' ? 'vtt' : 'srt';
 const previewCues = initialResult.ok ? initialResult.cues.slice(0, 25) : [];
 const totalCues = initialResult.ok ? initialResult.cues.length : 0;
@@ -389,6 +391,54 @@ const initialHealth = initialResult.ok
 		</div>
 
 		<div
+			data-testid="timeline-qc-summary"
+			data-qc-state={initialQc ? initialQc.status : 'empty'}
+			data-qc-errors={String(initialQc?.errorCount ?? 0)}
+			data-qc-warnings={String(initialQc?.warningCount ?? 0)}
+			data-qc-omitted-segments={String(initialQc?.omittedSegments ?? 0)}
+			data-qc-omitted-cues={String(initialQc?.omittedCues ?? 0)}
+			aria-label="Timeline QC summary"
+			class:list={[
+				'rounded-xl border p-3.5 space-y-2 min-w-0',
+				initialQc && initialQc.status === 'error'
+					? 'bg-rose-50/70 border-rose-300 text-rose-950'
+					: initialQc && initialQc.status === 'warning'
+						? 'bg-amber-50/70 border-amber-300 text-amber-950'
+						: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+			]}
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="text-xs font-semibold uppercase tracking-wider">Timeline QC</span>
+				<span data-testid="timeline-qc-summary-text" class="text-xs font-medium break-words">
+					{initialQc ? initialQc.summary : 'No conversion result yet.'}
+				</span>
+			</div>
+			<ul
+				data-testid="timeline-qc-issues"
+				class="space-y-1 text-xs leading-relaxed list-disc pl-5 break-words"
+			>
+				{
+					initialQcIssues.length === 0 ? (
+						<li data-qc-code="clean" class="list-none pl-0 text-emerald-900">
+							{initialQc ? 'No timeline QC issues detected.' : 'No timeline QC data for this input.'}
+						</li>
+					) : (
+						initialQcIssues.map((issue) => (
+							<li data-qc-code={issue.code} data-qc-scope={issue.scope} data-qc-index={String(issue.index)}>
+								[{issue.code}] {issue.message}
+							</li>
+						))
+					)
+				}
+			</ul>
+			<p data-qc-more class="text-[11px] opacity-80">
+				{initialQc && initialQc.issues.length > initialQcIssues.length
+					? `Showing ${initialQcIssues.length} of ${initialQc.issues.length} issues. Download the QC report for the full list.`
+					: 'Timing issues are reported, never silently repaired. Invalid or unrepresentable segments are omitted and counted.'}
+			</p>
+		</div>
+
+		<div
 			data-testid="cue-health-summary"
 			data-health-state={initialHealth ? (initialHealth.fastCueCount > 0 || initialHealth.avgCps > 20 ? 'warn' : 'ok') : 'empty'}
 			aria-label="Subtitle reading speed and line-fit health summary"
@@ -492,8 +542,22 @@ const initialHealth = initialResult.ok
 					>
 						Download .{preset.defaultOptions.format}
 					</button>
+					<button
+						type="button"
+						data-testid="qc-report-download-btn"
+						class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+					>
+						Download QC report
+					</button>
 				</div>
 			</div>
+			<p
+				data-testid="export-status"
+				data-export-risk="false"
+				role="status"
+				aria-live="polite"
+				class="hidden rounded-lg px-3 py-2 text-xs font-medium"
+			></p>
 			<textarea
 				id="subtitle-output"
 				data-testid="subtitle-output"
@@ -580,6 +644,7 @@ const initialHealth = initialResult.ok
 	import { trackSubtitleConverted, trackToolEvent } from '../lib/analytics';
 	import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
 	import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
+	import { formatQcReport, type QcIssue, type TimelineQcReport } from '../lib/timeline-qc';
 	import type { CueFormatOptions, OutputFormat, SampleId, SubtitleCue } from '../lib/types';
 
 	interface CueHealthSummary {
@@ -720,9 +785,19 @@ const initialHealth = initialResult.ok
 		const speakerCheckbox = root.querySelector<HTMLInputElement>('[data-testid="speaker-prefix-checkbox"]');
 		const statusBanner = root.querySelector<HTMLElement>('[data-testid="status-banner"]');
 		const cueHealthBox = root.querySelector<HTMLElement>('[data-testid="cue-health-summary"]');
+		const timelineQcBox = root.querySelector<HTMLElement>('[data-testid="timeline-qc-summary"]');
+		const timelineQcSummaryText = root.querySelector<HTMLElement>(
+			'[data-testid="timeline-qc-summary-text"]',
+		);
+		const timelineQcIssues = root.querySelector<HTMLElement>('[data-testid="timeline-qc-issues"]');
+		const timelineQcMore = root.querySelector<HTMLElement>('[data-qc-more]');
+		const exportStatus = root.querySelector<HTMLElement>('[data-testid="export-status"]');
 		const subtitleOutput = root.querySelector<HTMLTextAreaElement>('[data-testid="subtitle-output"]');
 		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="copy-output-btn"]');
 		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="download-output-btn"]');
+		const qcReportBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="qc-report-download-btn"]',
+		);
 		const previewTable = root.querySelector<HTMLTableElement>('[data-testid="cue-preview-table"]');
 		const previewCaption = root.querySelector<HTMLElement>('[data-preview-caption]');
 		const jsonHint = root.querySelector<HTMLElement>('[data-json-hint]');
@@ -761,6 +836,7 @@ const initialHealth = initialResult.ok
 		let activeByteLength = encoder.encode(activeRawJson).byteLength;
 		let activeBaseName = root.dataset.presetSlug || 'whisper-subtitles';
 		let fullOutputText = subtitleOutput.value;
+		let activeQc: TimelineQcReport | null = null;
 
 		const readOptions = (): CueFormatOptions => {
 			const format = (formatSelect.value as OutputFormat) || 'srt';
@@ -792,6 +868,98 @@ const initialHealth = initialResult.ok
 					Number(pill.dataset.maxLines) === options.maxLinesPerCue &&
 					(pill.dataset.speaker === 'true') === options.includeSpeakerPrefix;
 				pill.setAttribute('aria-pressed', matches ? 'true' : 'false');
+			}
+		};
+
+		const QC_TONE_CLASS: Record<TimelineQcReport['status'] | 'empty', string> = {
+			clean: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+			warning: 'bg-amber-50/70 border-amber-300 text-amber-950',
+			error: 'bg-rose-50/70 border-rose-300 text-rose-950',
+			empty: 'bg-slate-50 border-slate-200 text-slate-800',
+		};
+
+		const setExportStatus = (message: string, risk: boolean): void => {
+			if (!exportStatus) return;
+			exportStatus.textContent = message;
+			exportStatus.dataset.exportRisk = risk ? 'true' : 'false';
+			exportStatus.className = risk
+				? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950'
+				: 'hidden rounded-lg px-3 py-2 text-xs font-medium';
+		};
+
+		const announceExport = (
+			action: 'copy' | 'download' | 'qc_report',
+			format: OutputFormat,
+		): void => {
+			if (!activeQc) return;
+			if (action === 'qc_report') {
+				setExportStatus(
+					`Downloaded QC report with ${activeQc.issues.length} issue(s); ${activeQc.omittedSegments} segment(s) and ${activeQc.omittedCues} cue(s) were omitted.`,
+					activeQc.status !== 'clean',
+				);
+				return;
+			}
+			if (activeQc.status === 'clean') {
+				setExportStatus('', false);
+				return;
+			}
+			setExportStatus(
+				`Exported .${format} with timeline QC ${activeQc.status}: ${activeQc.errorCount} error(s), ${activeQc.warningCount} warning(s), ${activeQc.omittedSegments} omitted segment(s). Review the Timeline QC panel.`,
+				true,
+			);
+		};
+
+		const renderTimelineQc = (report: TimelineQcReport | null): void => {
+			activeQc = report;
+			const state = report ? report.status : 'empty';
+			if (timelineQcBox) {
+				timelineQcBox.dataset.qcState = state;
+				timelineQcBox.dataset.qcErrors = String(report?.errorCount ?? 0);
+				timelineQcBox.dataset.qcWarnings = String(report?.warningCount ?? 0);
+				timelineQcBox.dataset.qcOmittedSegments = String(report?.omittedSegments ?? 0);
+				timelineQcBox.dataset.qcOmittedCues = String(report?.omittedCues ?? 0);
+				timelineQcBox.className = `rounded-xl border p-3.5 space-y-2 min-w-0 ${QC_TONE_CLASS[state]}`;
+			}
+			if (timelineQcSummaryText) {
+				timelineQcSummaryText.textContent = report
+					? report.summary
+					: 'Timeline QC did not run for this input.';
+			}
+			if (timelineQcIssues) {
+				const fragment = document.createDocumentFragment();
+				const items: QcIssue[] = report ? report.issues.slice(0, 25) : [];
+				if (!report) {
+					const empty = document.createElement('li');
+					empty.dataset.qcCode = 'empty';
+					empty.className = 'list-none pl-0';
+					empty.textContent = 'No timeline QC data for this input.';
+					fragment.appendChild(empty);
+				} else if (items.length === 0) {
+					const clean = document.createElement('li');
+					clean.dataset.qcCode = 'clean';
+					clean.className = 'list-none pl-0 text-emerald-900';
+					clean.textContent = 'No timeline QC issues detected.';
+					fragment.appendChild(clean);
+				} else {
+					for (const issue of items) {
+						const item = document.createElement('li');
+						item.dataset.qcCode = issue.code;
+						item.dataset.qcScope = issue.scope;
+						item.dataset.qcIndex = String(issue.index);
+						item.textContent = `[${issue.code}] ${issue.message}`;
+						fragment.appendChild(item);
+					}
+				}
+				timelineQcIssues.replaceChildren(fragment);
+			}
+			if (timelineQcMore) {
+				timelineQcMore.textContent =
+					report && report.issues.length > 25
+						? `Showing 25 of ${report.issues.length} issues. Download the QC report for the full list.`
+						: 'Timing issues are reported, never silently repaired. Invalid or unrepresentable segments are omitted and counted.';
+			}
+			if (qcReportBtn) {
+				qcReportBtn.disabled = !report;
 			}
 		};
 
@@ -958,6 +1126,8 @@ const initialHealth = initialResult.ok
 						: fullOutputText;
 				copyBtn.disabled = fullOutputText.length === 0;
 				downloadBtn.disabled = fullOutputText.length === 0;
+				setExportStatus('', false);
+				renderTimelineQc(result.qc);
 				renderCueHealth(result.cues, options.maxCharsPerLine, result.parsed.durationSec);
 				renderCuePreview(result.cues, options.format, options.maxCharsPerLine);
 				trackSubtitleConverted({
@@ -978,6 +1148,8 @@ const initialHealth = initialResult.ok
 				subtitleOutput.value = '';
 				copyBtn.disabled = true;
 				downloadBtn.disabled = true;
+				setExportStatus('', false);
+				renderTimelineQc(result.qc ?? null);
 				renderCueHealth(null, options.maxCharsPerLine, 0);
 				renderCuePreview([], options.format, options.maxCharsPerLine);
 			}
@@ -1133,6 +1305,7 @@ const initialHealth = initialResult.ok
 				document.execCommand('copy');
 			}
 			trackToolEvent('subtitle_export', { export_action: 'copy', output_format: format });
+			announceExport('copy', format);
 			const originalLabel = copyBtn.textContent;
 			copyBtn.textContent = 'Copied';
 			window.setTimeout(() => {
@@ -1152,6 +1325,25 @@ const initialHealth = initialResult.ok
 			anchor.click();
 			anchor.remove();
 			trackToolEvent('subtitle_export', { export_action: 'download', output_format: format });
+			announceExport('download', format);
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		qcReportBtn?.addEventListener('click', () => {
+			if (!activeQc) return;
+			const reportText = formatQcReport(activeQc);
+			const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = `${activeBaseName}.qc.txt`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', { export_action: 'qc_report', output_format: 'txt' });
+			announceExport('qc_report', 'txt');
 			window.setTimeout(() => {
 				URL.revokeObjectURL(objectUrl);
 			}, 1000);

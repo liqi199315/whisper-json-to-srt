@@ -1,0 +1,8 @@
+{
+	"task": "transcribe",
+	"duration": 1.5,
+	"segments": [
+		{ "id": 0, "start": 0, "end": 1.5, "text": "VALID_LINE_BEFORE_OVERFLOW" },
+		{ "id": 1, "start": 1e308, "end": 1e308, "text": "OVERFLOW_FINITE_LINE" }
+	]
+}

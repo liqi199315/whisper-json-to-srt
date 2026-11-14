@@ -1,0 +1,9 @@
+{
+	"task": "transcribe",
+	"duration": 7.2,
+	"segments": [
+		{ "id": 0, "start": 0.1, "end": 1.4, "text": "A clean synthetic opening line." },
+		{ "id": 1, "start": 1.8, "end": 4.2, "text": "A second synthetic line with clear spacing." },
+		{ "id": 2, "start": 4.8, "end": 7.0, "text": "A third synthetic closing line." }
+	]
+}

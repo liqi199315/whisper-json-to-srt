@@ -1,3 +1,12 @@
+import {
+	analyzeCues,
+	buildQcReport,
+	isRepresentableSeconds,
+	scanRawJsonText,
+	type QcIssue,
+	type QcSink,
+	type TimelineQcReport,
+} from './timeline-qc';
 import type {
 	CueFormatOptions,
 	DialectId,
@@ -14,10 +23,12 @@ export type ConvertResult =
 			parsed: Extract<ParseResult, { ok: true }>;
 			cues: SubtitleCue[];
 			output: string;
+			qc: TimelineQcReport;
 	  }
 	| {
 			ok: false;
 			error: string;
+			qc?: TimelineQcReport;
 	  };
 
 interface DialectAdapter {
@@ -64,6 +75,12 @@ function toFiniteNumber(value: unknown): number | null {
 	return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function toTimelineNumber(value: unknown): number | null {
+	const number = toFiniteNumber(value);
+	if (number === null) return null;
+	return isRepresentableSeconds(number) ? number : null;
+}
+
 function normalizeSpeaker(value: unknown): string | undefined {
 	if (typeof value === 'string') {
 		const trimmed = value.trim();
@@ -85,7 +102,8 @@ function parseTimestampString(value: unknown): number | null {
 	const minutes = Number(match[2]);
 	const seconds = Number(match[3]);
 	const millis = match[4] ? Number(match[4].padEnd(3, '0')) : 0;
-	return hours * 3600 + minutes * 60 + seconds + millis / 1000;
+	const total = hours * 3600 + minutes * 60 + seconds + millis / 1000;
+	return Number.isFinite(total) ? total : null;
 }
 
 function isCjkChar(char: string): boolean {
@@ -158,8 +176,8 @@ function normalizeWords(
 		if (!isRecord(item)) continue;
 		const word = extractWordToken(item);
 		if (!word) continue;
-		const rawStart = toFiniteNumber(item.start);
-		const rawEnd = toFiniteNumber(item.end);
+		const rawStart = toTimelineNumber(item.start);
+		const rawEnd = toTimelineNumber(item.end);
 		if (rawStart === null && rawEnd === null && !bounds) continue;
 		const startSec = rawStart !== null ? Math.max(0, rawStart * scaleToSec) : null;
 		const endSec = rawEnd !== null ? Math.max(0, rawEnd * scaleToSec) : null;
@@ -385,18 +403,18 @@ function extractWhisperStyleSegments(root: Record<string, unknown>): {
 	segments: RawSegment[];
 	durationHintSec?: number;
 } {
-	const durationHintSec = toFiniteNumber(root.duration) ?? undefined;
+	const durationHintSec = toTimelineNumber(root.duration) ?? undefined;
 	const rawSegments = Array.isArray(root.segments) ? root.segments : [];
 	const segments: RawSegment[] = [];
 	let anyNestedWords = false;
 
 	for (const item of rawSegments) {
 		if (!isRecord(item)) continue;
-		const rawStart = toFiniteNumber(item.start);
-		const rawEnd = toFiniteNumber(item.end);
+		const rawStart = toTimelineNumber(item.start);
+		const rawEnd = toTimelineNumber(item.end);
 		if (rawStart === null || rawEnd === null) continue;
 		const startSec = roundMicro(Math.max(0, rawStart));
-		const endSec = roundMicro(Math.max(startSec, rawEnd));
+		const endSec = roundMicro(rawEnd);
 		const speaker = normalizeSpeaker(item.speaker);
 		const nestedWords = Array.isArray(item.words)
 			? normalizeWords(item.words, 1, speaker, { startSec, endSec })
@@ -449,8 +467,8 @@ function extractWhisperCppSegments(root: Record<string, unknown>): {
 		let endSec: number | null = null;
 
 		if (isRecord(item.offsets)) {
-			const fromMs = toFiniteNumber(item.offsets.from);
-			const toMs = toFiniteNumber(item.offsets.to);
+			const fromMs = toTimelineNumber(item.offsets.from);
+			const toMs = toTimelineNumber(item.offsets.to);
 			if (fromMs !== null && toMs !== null) {
 				startSec = fromMs / 1000;
 				endSec = toMs / 1000;
@@ -471,7 +489,7 @@ function extractWhisperCppSegments(root: Record<string, unknown>): {
 		if (!text) continue;
 
 		const safeStart = roundMicro(Math.max(0, startSec));
-		const safeEnd = roundMicro(Math.max(safeStart, endSec));
+		const safeEnd = roundMicro(endSec);
 		const seg: RawSegment = { startSec: safeStart, endSec: safeEnd, text };
 		const speaker = normalizeSpeaker(item.speaker);
 		if (speaker) seg.speaker = speaker;
@@ -487,7 +505,7 @@ function extractDeepgramSegments(root: Record<string, unknown>): {
 } {
 	const results = isRecord(root.results) ? root.results : {};
 	const metadata = isRecord(root.metadata) ? root.metadata : {};
-	const durationHintSec = toFiniteNumber(metadata.duration) ?? undefined;
+	const durationHintSec = toTimelineNumber(metadata.duration) ?? undefined;
 
 	const channels = Array.isArray(results.channels) ? results.channels : [];
 	const firstChannel = isRecord(channels[0]) ? channels[0] : {};
@@ -503,11 +521,11 @@ function extractDeepgramSegments(root: Record<string, unknown>): {
 		const segments: RawSegment[] = [];
 		for (const utt of results.utterances) {
 			if (!isRecord(utt)) continue;
-			const rawStart = toFiniteNumber(utt.start);
-			const rawEnd = toFiniteNumber(utt.end);
+			const rawStart = toTimelineNumber(utt.start);
+			const rawEnd = toTimelineNumber(utt.end);
 			if (rawStart === null || rawEnd === null) continue;
 			const startSec = roundMicro(Math.max(0, rawStart));
-			const endSec = roundMicro(Math.max(startSec, rawEnd));
+			const endSec = roundMicro(rawEnd);
 			const speaker = normalizeSpeaker(utt.speaker);
 			const uttWords = Array.isArray(utt.words)
 				? normalizeWords(utt.words, 1, speaker, { startSec, endSec })
@@ -548,13 +566,13 @@ function extractDeepgramSegments(root: Record<string, unknown>): {
 			if (Array.isArray(para.sentences) && para.sentences.length > 0) {
 				for (const sent of para.sentences) {
 					if (!isRecord(sent)) continue;
-					const sStart = toFiniteNumber(sent.start);
-					const sEnd = toFiniteNumber(sent.end);
+					const sStart = toTimelineNumber(sent.start);
+					const sEnd = toTimelineNumber(sent.end);
 					const sText = typeof sent.text === 'string' ? sent.text.trim() : '';
 					if (sStart === null || sEnd === null || !sText) continue;
 					const seg: RawSegment = {
 						startSec: roundMicro(Math.max(0, sStart)),
-						endSec: roundMicro(Math.max(0, sStart, sEnd)),
+						endSec: roundMicro(sEnd),
 						text: sText,
 					};
 					if (speaker) seg.speaker = speaker;
@@ -608,11 +626,11 @@ function extractAssemblyAiSegments(root: Record<string, unknown>): {
 		const segments: RawSegment[] = [];
 		for (const utt of root.utterances) {
 			if (!isRecord(utt)) continue;
-			const rawStart = toFiniteNumber(utt.start);
-			const rawEnd = toFiniteNumber(utt.end);
+			const rawStart = toTimelineNumber(utt.start);
+			const rawEnd = toTimelineNumber(utt.end);
 			if (rawStart === null || rawEnd === null) continue;
 			const startSec = roundMicro(Math.max(0, rawStart / 1000));
-			const endSec = roundMicro(Math.max(startSec, rawEnd / 1000));
+			const endSec = roundMicro(rawEnd / 1000);
 			const speaker = normalizeSpeaker(utt.speaker);
 			const uttWords = Array.isArray(utt.words)
 				? normalizeWords(utt.words, 0.001, speaker, { startSec, endSec })
@@ -688,11 +706,11 @@ function extractCapCutDraftSegments(root: Record<string, unknown>): {
 			const text = textById.get(segment.material_id);
 			if (!text) continue;
 			const range = isRecord(segment.target_timerange) ? segment.target_timerange : null;
-			const startUs = range ? toFiniteNumber(range.start) : null;
-			const durationUs = range ? toFiniteNumber(range.duration) : null;
+			const startUs = range ? toTimelineNumber(range.start) : null;
+			const durationUs = range ? toTimelineNumber(range.duration) : null;
 			if (startUs === null || durationUs === null || durationUs < 0) continue;
 			const startSec = roundMicro(Math.max(0, startUs / 1_000_000));
-			const endSec = roundMicro(Math.max(startSec, (startUs + durationUs) / 1_000_000));
+			const endSec = roundMicro((startUs + durationUs) / 1_000_000);
 			segments.push({ startSec, endSec, text });
 		}
 	}
@@ -804,7 +822,10 @@ const DIALECT_ADAPTERS: DialectAdapter[] = [
 ];
 
 export function formatTimestamp(seconds: number, format: 'srt' | 'vtt'): string {
-	const clamped = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+	if (!isRepresentableSeconds(seconds)) {
+		throw new RangeError(`Cannot format a non-finite or unrepresentable timestamp: ${String(seconds)}`);
+	}
+	const clamped = Math.max(0, seconds);
 	const totalMs = Math.round(clamped * 1000);
 	const ms = totalMs % 1000;
 	const totalSeconds = Math.floor(totalMs / 1000);
@@ -981,6 +1002,7 @@ function tokenizeSegmentText(text: string, maxCharsPerLine: number): string[] {
 export function reflowCues(
 	parsed: Extract<ParseResult, { ok: true }>,
 	options: CueFormatOptions,
+	qc?: QcSink,
 ): SubtitleCue[] {
 	const maxCharsPerLine = Math.max(4, Math.floor(options.maxCharsPerLine || 42));
 	const maxLinesPerCue: 1 | 2 = options.maxLinesPerCue === 1 ? 1 : 2;
@@ -1181,18 +1203,56 @@ export function reflowCues(
 		}
 	}
 
-	return drafts.map((draft, idx) => {
-		const startSec = roundMicro(Math.max(0, draft.startSec + offsetSec));
-		const endSec = roundMicro(Math.max(startSec + 0.05, draft.endSec + offsetSec));
+	const cues: SubtitleCue[] = [];
+	for (const draft of drafts) {
+		const shiftedStart = draft.startSec + offsetSec;
+		const shiftedEnd = draft.endSec + offsetSec;
+		const cueIndex = cues.length + 1;
+
+		if (
+			!isRepresentableSeconds(shiftedStart) ||
+			!isRepresentableSeconds(shiftedEnd) ||
+			!isRepresentableSeconds(roundMicro(shiftedStart)) ||
+			!isRepresentableSeconds(roundMicro(shiftedEnd))
+		) {
+			qc?.({
+				code: 'invalid-time',
+				severity: 'error',
+				scope: 'cue',
+				index: cueIndex,
+				field: 'range',
+				value: `${String(shiftedStart)} -> ${String(shiftedEnd)}`,
+				message: `Cue ${cueIndex} has a non-finite or unrepresentable time range and was omitted from the subtitle output.`,
+			});
+			continue;
+		}
+
+		let startSec = roundMicro(Math.max(0, shiftedStart));
+		let endSec = roundMicro(shiftedEnd);
+		if (offsetSec < 0 && (shiftedStart < 0 || shiftedEnd < 0)) {
+			const clampedEnd = Math.max(endSec, startSec + 0.05);
+			qc?.({
+				code: 'offset-clamped',
+				severity: 'info',
+				scope: 'cue',
+				index: cueIndex,
+				field: 'range',
+				value: `${roundMicro(shiftedStart)} -> ${roundMicro(shiftedEnd)}`,
+				message: `Offset ${offsetSec * 1000} ms moved cue ${cueIndex} before 0.000 s. It was clamped to ${startSec.toFixed(3)} s - ${clampedEnd.toFixed(3)} s.`,
+			});
+			endSec = roundMicro(clampedEnd);
+		}
+
 		const cue: SubtitleCue = {
-			index: idx + 1,
+			index: cueIndex,
 			startSec,
 			endSec,
 			lines: draft.lines,
 		};
 		if (draft.speaker) cue.speaker = draft.speaker;
-		return cue;
-	});
+		cues.push(cue);
+	}
+	return cues;
 }
 
 function escapeCsvField(value: string): string {
@@ -1254,16 +1314,66 @@ export function convertAsrJson(
 	rawJsonText: string,
 	options: CueFormatOptions,
 ): ConvertResult {
+	const scan = scanRawJsonText(rawJsonText);
 	const parsed = parseAsrJson(rawJsonText);
+
 	if (!parsed.ok) {
-		return { ok: false, error: parsed.error };
+		const qc =
+			scan.issues.length > 0
+				? buildQcReport({
+						issues: scan.issues,
+						checkedSegments: scan.checkedSegments,
+						emittedCues: 0,
+						omittedSegments: scan.omittedSegments,
+						omittedCues: 0,
+					})
+				: undefined;
+		if (!qc) {
+			return { ok: false, error: parsed.error };
+		}
+		const detail = qc.issues
+			.slice(0, 3)
+			.map((issue) => `[${issue.code}] ${issue.message}`)
+			.join(' ');
+		return {
+			ok: false,
+			error: `${parsed.error} Timeline QC rejected the candidate segments: ${detail}`,
+			qc,
+		};
 	}
-	const cues = reflowCues(parsed, options);
+
+	const qcIssues: QcIssue[] = [...scan.issues];
+	let omittedCues = 0;
+	const cues = reflowCues(parsed, options, (issue) => {
+		qcIssues.push(issue);
+		if (issue.code === 'invalid-time' && issue.scope === 'cue') {
+			omittedCues += 1;
+		}
+	});
+	qcIssues.push(...analyzeCues(cues));
+
+	const qc = buildQcReport({
+		issues: qcIssues,
+		checkedSegments: scan.checkedSegments,
+		emittedCues: cues.length,
+		omittedSegments: scan.omittedSegments,
+		omittedCues,
+	});
+
+	if (cues.length === 0) {
+		return {
+			ok: false,
+			error: `Detected ${parsed.dialectLabel}, but timeline QC omitted every cue. ${qc.summary}`,
+			qc,
+		};
+	}
+
 	const output = serializeCues(cues, options.format);
 	return {
 		ok: true,
 		parsed,
 		cues,
 		output,
+		qc,
 	};
 }

@@ -1,0 +1,8 @@
+{
+	"task": "transcribe",
+	"segments": [
+		{ "id": 0, "start": null, "end": 1.0, "text": "NULL_START_LINE" },
+		{ "id": 1, "start": 0.0, "end": "NaN", "text": "STRING_NAN_LINE" },
+		{ "id": 2, "start": 0.5, "end": 1.0, "text": "KEPT_LINE" }
+	]
+}

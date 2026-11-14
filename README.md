@@ -57,8 +57,11 @@ cat transcript.json | ./bin/json-to-srt.mjs -f srt > output.srt
 | `--max-lines <1\|2>` | | Max lines per cue (1 or 2) | `2` |
 | `--offset-ms <n>` | | Timestamp offset shift in milliseconds | `0` |
 | `--speaker` / `--no-speaker` | | Include or omit `[SPEAKER_XX]` labels | `--no-speaker` |
+| `--fail-on-qc` | | Exit with code `3` and write no output when timeline QC reports errors | off |
 | `--help` | `-h` | Display usage instructions and web app link | |
 | `--version` | `-v` | Display version number | |
+
+Timeline QC runs in both the browser and CLI. It reports non-finite or unrepresentable times, reversed ranges, overlaps, and empty segments with stable codes such as `invalid-time`, `reversed-range`, `overlap`, and `empty-segment`. Invalid segments are omitted and counted; overlap and reversed ranges are reported without moving cue timing. The CLI writes the QC report to stderr and keeps the subtitle output on stdout or in the requested file.
 
 ## Built routes (14 content pages)
 

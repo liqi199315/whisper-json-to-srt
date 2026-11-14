@@ -1,0 +1,15 @@
+{
+	"task": "transcribe",
+	"language": "english",
+	"duration": 12,
+	"text": "Synthetic QC fixture. No real transcript content.",
+	"segments": [
+		{ "id": 0, "start": 0.0, "end": 1.5, "text": "CLEAN_OPENING_LINE" },
+		{ "id": 1, "start": 2.0, "end": 4.5, "text": "FIRST_OVERLAP_BLOCK" },
+		{ "id": 2, "start": 3.5, "end": 6.0, "text": "SECOND_OVERLAP_BLOCK" },
+		{ "id": 3, "start": 8.0, "end": 6.5, "text": "REVERSED_RANGE_LINE" },
+		{ "id": 4, "start": 1e999, "end": 1e999, "text": "PRIVATE_TRANSCRIPT_MARKER" },
+		{ "id": 5, "start": "2.5", "end": 3.0, "text": "STRING_TIME_LINE" },
+		{ "id": 6, "start": 9.0, "end": 10.0, "text": "   " }
+	]
+}

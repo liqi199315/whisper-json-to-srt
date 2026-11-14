@@ -1,0 +1,8 @@
+{
+	"task": "transcribe",
+	"duration": 4,
+	"segments": [
+		{ "id": 0, "start": 0.0, "end": 2.0, "text": "UPLOAD_OVERLAP_FIRST" },
+		{ "id": 1, "start": 1.5, "end": 3.5, "text": "UPLOAD_OVERLAP_SECOND" }
+	]
+}
