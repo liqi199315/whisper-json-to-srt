@@ -3,9 +3,11 @@
 ## 当前阶段（2026-11-15）
 
 - **项目路径**：`/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt/`
-- **C02 代码提交**：`57de751`（在 C01 WIP `5dd36ca` 之上）。`4571298` 只作 C01 之前的源码基线，不是当前代码提交，也不是线上版本。线上没有 `release.json`，所以任何本地 commit 都未证明已上线。本轮未 push、未部署。
-- **C02 最终核对（主会话，2026-11-15）**：`npm run verify:all` 退出码 0（Vitest 53/53，Playwright 8/8，14 路由，26 个产物）。共享 release 测试 9/9。CLI overflow `--fail-on-qc` 退出码 3 且不写文件。证据 `/Volumes/WorkSSD/Scratch/c02-cli-final`。
-- **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；当时线上首页与 6 种搜索爬虫请求返回 HTTP 200）。`2026-11-15` 已重新核验线上站点地图：14 个 URL 与本地完全一致，五个长尾页都在线上。线上没有 `release.json`，所以任何本地 commit 都未证明已上线。`4571298` 只作 C01 之前的源码基线。
+- **代码提交（2026-11-15 上线）**：`main` 已 rebase 到远端 `c15b4b3`（GA4 `subtitle_converted` 事件）之上，本地提交为 `592c413` 发布清单、`6be2963` 时间轴 QC、`4f2496c` 最终文档。三个提交均已 push 到 `origin/main`。`4571298` 只作 C01 之前的源码基线，不是当前代码提交。
+- **线上版本（2026-11-15）**：`npx wrangler deploy` 成功，Worker Version ID `5b708805-0071-413b-b366-283d8d599ae3`。线上 `/release.json` 记录 commit `4f2496c9ce91`，与部署时 HEAD 一致，`npm run release:check` 输出 `match`；14 条路由全部 HTTP 200，页面含 `G-085WZLBQ8F`。
+- **GA4 注入事故与修复（2026-11-15）**：本轮第一次部署漏了 `PUBLIC_GA4_MEASUREMENT_ID`，线上页面落成 `G-PENDING000` 占位符，而 `release:check` 仍报匹配（清单读的是注册表，不是构建产物）。已用 `PUBLIC_SITE_URL=https://jsontosrt.com PUBLIC_GA4_MEASUREMENT_ID=G-085WZLBQ8F` 重建并重新部署；共享清单脚本新增“每个构建 HTML 必须含注册表 measurement ID”的强制校验，测试 10/10。今后构建必须显式带环境变量。
+- **C02 最终核对（rebase 后，2026-11-15）**：`npm run verify:all` 退出码 0（Vitest 57/57，Playwright 8/8，14 路由，26 个产物）。CLI overflow `--fail-on-qc` 退出码 3 且不写文件。
+- **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；当时线上首页与 6 种搜索爬虫请求返回 HTTP 200）。`2026-11-15` 重新核验：线上站点地图 14 个 URL 与本地一致，14 条路由全部 HTTP 200，线上 `/release.json` 与本地 commit 匹配。
 - **代码仓库**：`https://github.com/liqi199315/whisper-json-to-srt` 当前为公开仓库。`2026-11-15` 用 `gh repo view` 读到 `visibility: PUBLIC`、`isPrivate: false`；仓库事件里 `2026-11-12T06:34:28Z` 有 `PublicEvent`。
 - **联系邮箱**：`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 已启用 Cloudflare Email Routing，转发至 `liqi199315@gmail.com`（2026-11-12 核验：`enabled: true, status: ready`；本轮未重查）
 - **90 天试验窗口**：`2026-11-12` 至 `2027-02-10`（详见 `PLAN_90DAY.md`）
@@ -58,7 +60,7 @@
 ## 下一步第一动作
 
 - `[人工]` 核对 `LAUNCH_KIT.md` 里 Show HN、Reddit、X 是否已发；Product Hunt 只确认到来源会话，不记为发布完成。GitHub 仓库保持公开，不再做「私有改公开」。
-- 五个长尾页已在线上站点地图中。是否为这 5 个 URL 补交 IndexNow，以及 Google 是否已处理当前 14 页站点地图，留给后续发布核对；本文件不记录未执行的提交。线上没有 `release.json`，所以即使补交 IndexNow，也不能把任何本地 commit（包括 `4571298` 或 C02 的 `57de751`）写成线上版本。
+- 2026-11-15 已把全部 14 条 URL 重新提交到 IndexNow（HTTP `202`）。GSC 与 Bing 的站点地图已是当前 14 条，无需重复提交；后续看 GSC 处理结果与自然曝光。
 
 ## 行动记录
 
