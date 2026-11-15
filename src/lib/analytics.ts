@@ -96,8 +96,9 @@ export function trackSubtitleConverted(input: {
 	format: string;
 	cueCount: number;
 	ok?: boolean;
+	userInitiated?: boolean;
 }): boolean {
-	if (input.ok === false || subtitleConvertedSent) {
+	if (input.ok === false || input.userInitiated === false || subtitleConvertedSent) {
 		return false;
 	}
 	const format = input.format.trim().toLowerCase();

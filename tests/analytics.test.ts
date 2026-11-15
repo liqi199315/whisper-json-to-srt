@@ -24,8 +24,11 @@ describe('trackSubtitleConverted', () => {
 		const calls = installGtag();
 		resetSubtitleConvertedSession();
 
-		expect(trackSubtitleConverted({ format: 'srt', cueCount: 3 })).toBe(true);
-		expect(trackSubtitleConverted({ format: 'vtt', cueCount: 9 })).toBe(false);
+		expect(
+			trackSubtitleConverted({ format: 'srt', cueCount: 8, userInitiated: false }),
+		).toBe(false);
+		expect(trackSubtitleConverted({ format: 'srt', cueCount: 3, userInitiated: true })).toBe(true);
+		expect(trackSubtitleConverted({ format: 'vtt', cueCount: 9, userInitiated: true })).toBe(false);
 
 		expect(calls).toEqual([
 			[
@@ -41,10 +44,12 @@ describe('trackSubtitleConverted', () => {
 		const calls = installGtag();
 		resetSubtitleConvertedSession();
 
-		expect(trackSubtitleConverted({ format: 'srt', cueCount: 0, ok: false })).toBe(false);
+		expect(
+			trackSubtitleConverted({ format: 'srt', cueCount: 0, ok: false, userInitiated: true }),
+		).toBe(false);
 		expect(calls).toEqual([]);
 
-		expect(trackSubtitleConverted({ format: 'srt', cueCount: 2 })).toBe(true);
+		expect(trackSubtitleConverted({ format: 'srt', cueCount: 2, userInitiated: true })).toBe(true);
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.[1]).toBe(SUBTITLE_CONVERTED_EVENT);
 	});

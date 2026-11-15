@@ -926,7 +926,10 @@ const initialHealth = initialResult.ok
 			tbody.appendChild(fragment);
 		};
 
+		let userHasInteracted = false;
+
 		const runConversion = (): void => {
+			const userInitiated = userHasInteracted;
 			const options = readOptions();
 			syncActiveModePill(options);
 			downloadBtn.textContent = `Download .${options.format}`;
@@ -961,6 +964,7 @@ const initialHealth = initialResult.ok
 					format: options.format,
 					cueCount: result.cues.length,
 					ok: true,
+					userInitiated,
 				});
 			} else {
 				statusBanner.dataset.status = 'error';
@@ -1154,6 +1158,7 @@ const initialHealth = initialResult.ok
 		});
 
 		runConversion();
+		userHasInteracted = true;
 	}
 
 	document.querySelectorAll<HTMLElement>('[data-workbench]').forEach(bindWorkbench);

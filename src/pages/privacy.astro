@@ -114,10 +114,9 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 							</td>
 						</tr>
 						<tr>
-							<tr>
 							<th scope="row" class="py-3 px-3 font-mono text-xs text-slate-900">subtitle_converted</th>
 							<td class="py-3 px-3 text-slate-700">
-								<code class="font-mono text-xs">format</code> (<code class="font-mono text-xs">srt</code>, <code class="font-mono text-xs">vtt</code>, <code class="font-mono text-xs">txt</code>, or <code class="font-mono text-xs">csv</code>) and <code class="font-mono text-xs">cue_count</code> (the number of cues in that first successful conversion). Sent once per page load.
+								<code class="font-mono text-xs">format</code> (<code class="font-mono text-xs">srt</code>, <code class="font-mono text-xs">vtt</code>, <code class="font-mono text-xs">txt</code>, or <code class="font-mono text-xs">csv</code>) and <code class="font-mono text-xs">cue_count</code> (the number of cues in that first successful conversion). Sent once per page load, on the first successful conversion after the visitor edits input, loads a file, chooses a sample, or changes a control. The automatic sample render on page load is not recorded.
 							</td>
 							<td class="py-3 px-3 text-slate-700">
 								Never includes transcript text, cue dialogue, speaker names, uploaded filenames, or file byte contents. Failed conversions are not recorded.
