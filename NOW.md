@@ -4,7 +4,7 @@
 
 - **项目路径**：`/Users/dake/Projects/aiapp/30_products/whisper-json-to-srt/`
 - **代码提交（2026-11-15 上线）**：`main` 已 rebase 到远端 `c15b4b3`（GA4 `subtitle_converted` 事件）之上，本地提交为 `592c413` 发布清单、`6be2963` 时间轴 QC、`4f2496c` 最终文档。三个提交均已 push 到 `origin/main`。`4571298` 只作 C01 之前的源码基线，不是当前代码提交。
-- **线上版本（2026-11-15）**：`npx wrangler deploy` 成功，Worker Version ID `5b708805-0071-413b-b366-283d8d599ae3`。线上 `/release.json` 记录 commit `4f2496c9ce91`，与部署时 HEAD 一致，`npm run release:check` 输出 `match`；14 条路由全部 HTTP 200，页面含 `G-085WZLBQ8F`。
+- **线上版本（2026-11-15）**：`npx wrangler deploy` 成功，线上 `/release.json` 的 commit 与部署时的 `git rev-parse HEAD` 一致，`npm run release:check` 输出 `match`；14 条路由全部 HTTP 200，页面含 `G-085WZLBQ8F`。Worker Version ID 以 `npx wrangler deployments list` 为准，不在文档里固定。
 - **GA4 注入事故与修复（2026-11-15）**：本轮第一次部署漏了 `PUBLIC_GA4_MEASUREMENT_ID`，线上页面落成 `G-PENDING000` 占位符，而 `release:check` 仍报匹配（清单读的是注册表，不是构建产物）。已用 `PUBLIC_SITE_URL=https://jsontosrt.com PUBLIC_GA4_MEASUREMENT_ID=G-085WZLBQ8F` 重建并重新部署；共享清单脚本新增“每个构建 HTML 必须含注册表 measurement ID”的强制校验，测试 10/10。今后构建必须显式带环境变量。
 - **C02 最终核对（rebase 后，2026-11-15）**：`npm run verify:all` 退出码 0（Vitest 57/57，Playwright 8/8，14 路由，26 个产物）。CLI overflow `--fail-on-qc` 退出码 3 且不写文件。
 - **正式生产域名**：`https://jsontosrt.com`（2026-11-12 已部署 Cloudflare Worker 并绑定主域名；当时线上首页与 6 种搜索爬虫请求返回 HTTP 200）。`2026-11-15` 重新核验：线上站点地图 14 个 URL 与本地一致，14 条路由全部 HTTP 200，线上 `/release.json` 与本地 commit 匹配。
