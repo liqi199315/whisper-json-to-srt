@@ -89,7 +89,7 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 
 		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
 			<h2 class="text-xl font-bold text-slate-950">
-				2. Anonymized GA4 Telemetry (<code class="font-mono text-base">page_view</code> and <code class="font-mono text-base">subtitle_export</code>)
+				2. Anonymized GA4 Telemetry (<code class="font-mono text-base">page_view</code>, <code class="font-mono text-base">subtitle_converted</code>, and <code class="font-mono text-base">subtitle_export</code>)
 			</h2>
 			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
 				On the live production domain, we use Google Analytics 4 (GA4) with IP anonymization enabled (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">anonymize_ip: true</code>) and Google Signals advertising personalization disabled to understand aggregate tool usage and search performance.
@@ -111,6 +111,16 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 							</td>
 							<td class="py-3 px-3 text-slate-700">
 								No user account IDs, email addresses, or cross-site ad profiles.
+							</td>
+						</tr>
+						<tr>
+							<tr>
+							<th scope="row" class="py-3 px-3 font-mono text-xs text-slate-900">subtitle_converted</th>
+							<td class="py-3 px-3 text-slate-700">
+								<code class="font-mono text-xs">format</code> (<code class="font-mono text-xs">srt</code>, <code class="font-mono text-xs">vtt</code>, <code class="font-mono text-xs">txt</code>, or <code class="font-mono text-xs">csv</code>) and <code class="font-mono text-xs">cue_count</code> (the number of cues in that first successful conversion). Sent once per page load.
+							</td>
+							<td class="py-3 px-3 text-slate-700">
+								Never includes transcript text, cue dialogue, speaker names, uploaded filenames, or file byte contents. Failed conversions are not recorded.
 							</td>
 						</tr>
 						<tr>

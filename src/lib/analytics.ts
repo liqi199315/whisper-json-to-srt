@@ -82,6 +82,40 @@ export function sanitizeAnalyticsParams(
 	return sanitized;
 }
 
+export const SUBTITLE_CONVERTED_EVENT = 'subtitle_converted';
+
+const OUTPUT_FORMATS = new Set(['srt', 'vtt', 'txt', 'csv']);
+
+let subtitleConvertedSent = false;
+
+export function resetSubtitleConvertedSession(): void {
+	subtitleConvertedSent = false;
+}
+
+export function trackSubtitleConverted(input: {
+	format: string;
+	cueCount: number;
+	ok?: boolean;
+}): boolean {
+	if (input.ok === false || subtitleConvertedSent) {
+		return false;
+	}
+	const format = input.format.trim().toLowerCase();
+	if (!OUTPUT_FORMATS.has(format)) {
+		return false;
+	}
+	if (!Number.isInteger(input.cueCount) || input.cueCount < 1) {
+		return false;
+	}
+
+	subtitleConvertedSent = true;
+	trackToolEvent(SUBTITLE_CONVERTED_EVENT, {
+		format,
+		cue_count: input.cueCount,
+	});
+	return true;
+}
+
 export function trackToolEvent(
 	eventName: string,
 	params?: Record<string, string | number | boolean>,

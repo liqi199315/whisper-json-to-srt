@@ -577,7 +577,7 @@ const initialHealth = initialResult.ok
 </section>
 
 <script>
-	import { trackToolEvent } from '../lib/analytics';
+	import { trackSubtitleConverted, trackToolEvent } from '../lib/analytics';
 	import { convertAsrJson, formatTimestamp } from '../lib/subtitle-engine';
 	import { SAMPLE_PAYLOADS } from '../lib/sample-payloads';
 	import type { CueFormatOptions, OutputFormat, SampleId, SubtitleCue } from '../lib/types';
@@ -957,6 +957,11 @@ const initialHealth = initialResult.ok
 				downloadBtn.disabled = fullOutputText.length === 0;
 				renderCueHealth(result.cues, options.maxCharsPerLine, result.parsed.durationSec);
 				renderCuePreview(result.cues, options.format, options.maxCharsPerLine);
+				trackSubtitleConverted({
+					format: options.format,
+					cueCount: result.cues.length,
+					ok: true,
+				});
 			} else {
 				statusBanner.dataset.status = 'error';
 				statusBanner.className =
