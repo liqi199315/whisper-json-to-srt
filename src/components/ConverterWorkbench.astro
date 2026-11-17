@@ -657,6 +657,7 @@ const initialHealth = initialResult.ok
 		durationSec: number;
 	}
 
+	const INPUT_DEBOUNCE_MS = 250;
 	const LARGE_INPUT_PREVIEW_CHARS = 32_768;
 	const LARGE_INPUT_THRESHOLD_CHARS = 500_000;
 	const LARGE_OUTPUT_THRESHOLD_CHARS = 1_500_000;
@@ -834,6 +835,8 @@ const initialHealth = initialResult.ok
 			jsonInput.value = activeRawJson;
 		}
 		let activeByteLength = encoder.encode(activeRawJson).byteLength;
+		let byteLengthDirty = false;
+		let debounceTimer: number | null = null;
 		let activeBaseName = root.dataset.presetSlug || 'whisper-subtitles';
 		let fullOutputText = subtitleOutput.value;
 		let activeQc: TimelineQcReport | null = null;
@@ -1096,7 +1099,19 @@ const initialHealth = initialResult.ok
 
 		let userHasInteracted = false;
 
+		const cancelPendingConversion = (): void => {
+			if (debounceTimer !== null) {
+				window.clearTimeout(debounceTimer);
+				debounceTimer = null;
+			}
+		};
+
 		const runConversion = (): void => {
+			cancelPendingConversion();
+			if (byteLengthDirty) {
+				activeByteLength = encoder.encode(activeRawJson).byteLength;
+				byteLengthDirty = false;
+			}
 			const userInitiated = userHasInteracted;
 			const options = readOptions();
 			syncActiveModePill(options);
@@ -1155,12 +1170,36 @@ const initialHealth = initialResult.ok
 			}
 		};
 
+		const scheduleConversion = (): void => {
+			cancelPendingConversion();
+			if (activeRawJson.trim().length > 0) {
+				copyBtn.disabled = false;
+				downloadBtn.disabled = false;
+				if (qcReportBtn) {
+					qcReportBtn.disabled = false;
+				}
+			}
+			debounceTimer = window.setTimeout(() => {
+				debounceTimer = null;
+				runConversion();
+			}, INPUT_DEBOUNCE_MS);
+		};
+
+		const flushPendingConversion = (): void => {
+			if (debounceTimer !== null) {
+				cancelPendingConversion();
+				runConversion();
+			}
+		};
+
 		const loadSelectedSample = (): void => {
+			cancelPendingConversion();
 			const dialect = sampleSelect.value as SampleId;
 			const sample = SAMPLE_PAYLOADS[dialect];
 			const sampleText = sample.json;
 			activeRawJson = sampleText;
 			activeByteLength = encoder.encode(sampleText).byteLength;
+			byteLengthDirty = false;
 			activeBaseName = sample.filename.replace(/\.json$/i, '') || dialect;
 			jsonInput.value = sampleText;
 			if (jsonHint) {
@@ -1171,10 +1210,13 @@ const initialHealth = initialResult.ok
 		};
 
 		const ingestLocalFile = async (file: File): Promise<void> => {
+			cancelPendingConversion();
 			const text = await file.text();
+			cancelPendingConversion();
 			const bytes = file.size > 0 ? file.size : encoder.encode(text).byteLength;
 			activeRawJson = text;
 			activeByteLength = bytes;
+			byteLengthDirty = false;
 			activeBaseName = file.name.replace(/\.json$/i, '') || 'transcript';
 
 			if (text.length > LARGE_INPUT_THRESHOLD_CHARS) {
@@ -1267,11 +1309,11 @@ const initialHealth = initialResult.ok
 
 		jsonInput.addEventListener('input', () => {
 			activeRawJson = jsonInput.value;
-			activeByteLength = encoder.encode(activeRawJson).byteLength;
+			byteLengthDirty = true;
 			if (jsonHint) {
 				jsonHint.textContent = 'Live input buffer';
 			}
-			runConversion();
+			scheduleConversion();
 		});
 
 		fileUpload.addEventListener('change', () => {
@@ -1284,18 +1326,25 @@ const initialHealth = initialResult.ok
 		loadSampleBtn.addEventListener('click', loadSelectedSample);
 
 		formatSelect.addEventListener('change', runConversion);
-		maxCharsInput.addEventListener('input', runConversion);
+		maxCharsInput.addEventListener('input', scheduleConversion);
+		maxCharsInput.addEventListener('change', flushPendingConversion);
 		maxCharsInput.addEventListener('blur', () => {
-			const parsed = Number.parseInt(maxCharsInput.value, 10);
+			const beforeClamp = maxCharsInput.value;
+			const parsed = Number.parseInt(beforeClamp, 10);
 			const clamped = Number.isFinite(parsed) ? Math.min(84, Math.max(8, parsed)) : defaultMaxChars;
-			maxCharsInput.value = String(clamped);
-			runConversion();
+			const clampedStr = String(clamped);
+			maxCharsInput.value = clampedStr;
+			if (debounceTimer !== null || clampedStr !== beforeClamp) {
+				runConversion();
+			}
 		});
 		maxLinesSelect.addEventListener('change', runConversion);
-		offsetMsInput.addEventListener('input', runConversion);
+		offsetMsInput.addEventListener('input', scheduleConversion);
+		offsetMsInput.addEventListener('change', flushPendingConversion);
 		speakerCheckbox.addEventListener('change', runConversion);
 
 		copyBtn.addEventListener('click', async () => {
+			flushPendingConversion();
 			if (!fullOutputText) return;
 			const format = (formatSelect.value as OutputFormat) || 'srt';
 			try {
@@ -1314,6 +1363,7 @@ const initialHealth = initialResult.ok
 		});
 
 		downloadBtn.addEventListener('click', () => {
+			flushPendingConversion();
 			if (!fullOutputText) return;
 			const format = (formatSelect.value as OutputFormat) || 'srt';
 			const blob = new Blob([fullOutputText], { type: MIME_BY_FORMAT[format] });
@@ -1332,6 +1382,7 @@ const initialHealth = initialResult.ok
 		});
 
 		qcReportBtn?.addEventListener('click', () => {
+			flushPendingConversion();
 			if (!activeQc) return;
 			const reportText = formatQcReport(activeQc);
 			const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });

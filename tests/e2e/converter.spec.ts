@@ -528,4 +528,65 @@ test.describe('Whisper JSON to SRT converter journeys', () => {
 			expect(scrollWidth).toBeLessThanOrEqual(375);
 		}
 	});
+
+	test('debounces rapid JSON input edits and flushes immediately on export or option change', async ({
+		page,
+	}) => {
+		await page.goto('/');
+		const statusBanner = page.getByTestId('status-banner');
+		const subtitleOutput = page.getByTestId('subtitle-output');
+		await expect(statusBanner).toHaveAttribute('data-status', 'ok');
+		await expect.poll(() => readOutputText(subtitleOutput)).toContain('-->');
+
+		const immediateState = await page.evaluate(() => {
+			const input = document.querySelector<HTMLTextAreaElement>('[data-testid="json-input"]');
+			const output = document.querySelector<HTMLTextAreaElement>('[data-testid="subtitle-output"]');
+			const formatSelect = document.querySelector<HTMLSelectElement>(
+				'[data-testid="format-select"]',
+			);
+			if (!input || !output || !formatSelect) {
+				throw new Error('Missing workbench elements');
+			}
+			input.value = JSON.stringify({
+				segments: [{ id: 0, start: 0, end: 1.5, text: 'SYNC_FLUSH_ON_FORMAT_CHANGE' }],
+			});
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			const outputRightAfterInput = output.value;
+
+			formatSelect.value = 'vtt';
+			formatSelect.dispatchEvent(new Event('change', { bubbles: true }));
+			const outputRightAfterChange = output.value;
+
+			return { outputRightAfterInput, outputRightAfterChange };
+		});
+
+		expect(immediateState.outputRightAfterInput).not.toContain('SYNC_FLUSH_ON_FORMAT_CHANGE');
+		expect(immediateState.outputRightAfterChange.startsWith('WEBVTT')).toBe(true);
+		expect(immediateState.outputRightAfterChange).toContain('SYNC_FLUSH_ON_FORMAT_CHANGE');
+
+		await page.evaluate(() => {
+			const input = document.querySelector<HTMLTextAreaElement>('[data-testid="json-input"]');
+			if (!input) throw new Error('Missing json-input');
+			input.value = JSON.stringify({
+				segments: [{ id: 0, start: 0, end: 1.25, text: 'SYNC_FLUSH_ON_DOWNLOAD' }],
+			});
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		});
+
+		const downloadPromise = page.waitForEvent('download');
+		await page.getByTestId('download-output-btn').click();
+		const download = await downloadPromise;
+		const downloadedText = await readDownloadText(download);
+		expect(downloadedText).toContain('SYNC_FLUSH_ON_DOWNLOAD');
+
+		await page.evaluate(() => {
+			const input = document.querySelector<HTMLTextAreaElement>('[data-testid="json-input"]');
+			if (!input) throw new Error('Missing json-input');
+			input.value = JSON.stringify({
+				segments: [{ id: 0, start: 0, end: 1.8, text: 'DEBOUNCED_AUTO_CONVERT_OK' }],
+			});
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		});
+		await expect.poll(() => readOutputText(subtitleOutput)).toContain('DEBOUNCED_AUTO_CONVERT_OK');
+	});
 });
