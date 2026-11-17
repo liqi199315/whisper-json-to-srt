@@ -41,6 +41,12 @@
 - [CapCut JSON to SRT](https://jsontosrt.com/capcut-json-to-srt/): Read a plain-text `draft_content.json` or macOS `draft_info.json`. Encrypted 6.0+ and template drafts are refused.
 - [gpt-4o-transcribe-diarize SRT](https://jsontosrt.com/gpt-4o-transcribe-diarize-srt/): Convert `diarized_json` segments with `speaker`, `start`, and `end` into speaker-labeled SRT.
 - [Deepgram JSON to SRT](https://jsontosrt.com/deepgram-json-to-srt/): Export the existing Deepgram parser from a two-speaker `results.utterances` sample.
+- [AssemblyAI JSON to SRT](https://jsontosrt.com/assemblyai-json-to-srt/): Convert AssemblyAI integer millisecond utterance and word JSON transcripts into clean speaker-prefixed subtitles.
+- [Broadcast Subtitle QC Standards](https://jsontosrt.com/broadcast-subtitle-qc-standards/): Learn broadcast quality standards: CPL limits, reading speed CPS thresholds, and automated timeline QC checks.
+- [ElevenLabs Scribe JSON to SRT](https://jsontosrt.com/elevenlabs-scribe-json-to-srt/): Convert ElevenLabs Scribe speech-to-text JSON transcripts with word-level alignment into clean subtitles.
+- [AWS Transcribe JSON to SRT](https://jsontosrt.com/aws-transcribe-json-to-srt/): Convert Amazon AWS Transcribe JSON items into formatted SubRip subtitles with automated punctuation alignment.
+- [DaVinci Resolve Subtitle Import Fix](https://jsontosrt.com/davinci-resolve-subtitle-import-error/): Resolve DaVinci Resolve subtitle import errors, frame rate timecode drift, and cue overlap rejections.
+- [Whisper Hallucination Timestamp Desync](https://jsontosrt.com/whisper-hallucination-timestamp-desync/): Diagnose and fix Whisper subtitle timestamp desynchronization, silent loops, and corrupted cue intervals.
 
 ## Trust, Privacy & Legal Pages
 

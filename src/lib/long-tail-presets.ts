@@ -487,6 +487,665 @@ smart_format=true
 			},
 		],
 	},
+	{
+		slug: 'assemblyai-json-to-srt',
+		path: '/assemblyai-json-to-srt/',
+		navLabel: 'AssemblyAI',
+		h1: 'AssemblyAI JSON to SRT Converter',
+		seoTitle: 'AssemblyAI JSON to SRT | Utterances and Word Timings to Subtitles',
+		metaDescription:
+			'Convert AssemblyAI utterances and word-level JSON transcripts into SRT, VTT, or CSV subtitles locally in your browser with speaker labels.',
+		primaryKeyword: 'assemblyai json to srt',
+		heroSummary:
+			'Turn AssemblyAI transcription responses into broadcast-ready SubRip SRT, WebVTT, plain text, or CSV subtitle tracks. Parses integer millisecond utterance and word timestamps locally in browser RAM with automatic speaker diarization prefixes.',
+		defaultSampleId: 'assemblyai-utterances',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: true,
+		},
+		schemaNotes: [
+			'Parses AssemblyAI utterances[] arrays with integer millisecond start and end values, normalizing them to second-based timestamps.',
+			'Preserves speaker labels (such as "A" and "B") and maps them to [Speaker A] prefixes when speaker formatting is enabled.',
+			'Falls back to top-level words[] array when utterance diarization is not requested in the transcription job.',
+			'Processes multi-hour transcript files entirely in browser memory without sending customer dialogue over the network.',
+		],
+		guides: [
+			{
+				id: 'assemblyai-sdk-export',
+				kicker: 'Python SDK Integration',
+				heading: 'Generating timed transcripts with AssemblyAI Python SDK',
+				paragraphs: [
+					'AssemblyAI provides speech-to-text models that output structured word and utterance blocks. When speaker labels are enabled, AssemblyAI groups words into conversational turns with integer millisecond timestamps.',
+					'Saving this JSON payload allows you to export SubRip subtitles with balanced line breaks and speaker prefixes without re-running cloud transcription jobs.',
+				],
+				code: {
+					label: 'transcribe_assemblyai.py',
+					source: `import assemblyai as aai
+import json
+
+aai.settings.api_key = "your_assemblyai_api_key"
+
+config = aai.TranscriptionConfig(
+    speaker_labels=True,
+    punctuate=True,
+    format_text=True,
+)
+
+transcriber = aai.Transcriber()
+transcript = transcriber.transcribe("interview.mp3", config=config)
+
+# Save the full utterances payload
+payload = {
+    "audio_duration": transcript.audio_duration,
+    "utterances": [
+        {
+            "speaker": u.speaker,
+            "start": u.start,
+            "end": u.end,
+            "text": u.text,
+            "words": [
+                {
+                    "text": w.text,
+                    "start": w.start,
+                    "end": w.end,
+                    "confidence": w.confidence,
+                    "speaker": w.speaker,
+                }
+                for w in u.words
+            ],
+        }
+        for u in (transcript.utterances or [])
+    ],
+}
+
+with open("assemblyai_transcript.json", "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2)
+`,
+				},
+			},
+			{
+				id: 'milliseconds-normalization',
+				kicker: 'Timestamp Math',
+				heading: 'Normalizing integer milliseconds to broadcast SubRip timestamps',
+				paragraphs: [
+					'AssemblyAI reports start and end times as integer milliseconds (e.g., 1240 ms). Standard SubRip format requires hours, minutes, seconds, and comma-separated milliseconds (00:00:01,240).',
+					'Our client-side engine converts milliseconds to seconds dynamically, wraps long sentences at natural word boundaries, and verifies reading speed to prevent congested caption cues.',
+				],
+				bullets: [
+					'Speaker boundary protection: Dialogue turns automatically start a new subtitle cue on speaker change.',
+					'Confidence filtering: Preserves high-confidence word alignment while filtering dropped acoustic tokens.',
+					'Universal format export: Instant download as SubRip (.srt), WebVTT (.vtt), plain text (.txt), or CSV (.csv).',
+				],
+				links: [
+					{
+						href: '/deepgram-json-to-srt/',
+						label: 'Deepgram Nova utterances preset',
+					},
+					{
+						href: '/whisperx-diarized-json-to-srt/',
+						label: 'WhisperX diarized subtitle converter',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'How does this tool handle AssemblyAI integer milliseconds?',
+				answer:
+					'The parser automatically detects integer millisecond values in utterances and words arrays, dividing them by 1000 to compute exact fractional seconds without floating-point precision loss.',
+			},
+			{
+				question: 'Can I convert AssemblyAI transcripts that do not include speaker diarization?',
+				answer:
+					'Yes. If your JSON payload omits the utterances array and only includes the words array, the engine groups words into 42-character broadcast lines with pause-based cue splitting.',
+			},
+			{
+				question: 'Are my audio recordings or AssemblyAI JSON transcripts sent to external servers?',
+				answer:
+					'No. Every conversion runs 100% locally in browser RAM using JavaScript File.text() and Blob APIs. Zero transcript bytes leave your device.',
+			},
+			{
+				question: 'What video editors accept the exported SRT files?',
+				answer:
+					'The generated SRT files use UTF-8 encoding without BOM, comma millisecond separators, and blank-line cue separators, ensuring seamless import into Premiere Pro, DaVinci Resolve, Final Cut Pro, and CapCut.',
+			},
+		],
+	},
+	{
+		slug: 'broadcast-subtitle-qc-standards',
+		path: '/broadcast-subtitle-qc-standards/',
+		navLabel: 'Broadcast QC Guide',
+		h1: 'Broadcast Subtitle QC Standards and Timing Guidelines',
+		seoTitle: 'Broadcast Subtitle QC Standards | Netflix BBC CPL and CPS Guide',
+		metaDescription:
+			'Learn broadcast subtitle quality control standards: CPL limits, reading speed CPS thresholds, minimum cue duration, and automated timing QC checks.',
+		primaryKeyword: 'broadcast subtitle qc standards',
+		heroSummary:
+			'Master broadcast and streaming subtitle quality control standards. Compare Netflix, BBC, and EBU specifications for line length, reading speeds, and shot change margins, and validate your ASR subtitle files with automated client-side timeline QC.',
+		defaultSampleId: 'openai-verbose-json',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Evaluates subtitle cues against international broadcast standards: 37 to 42 characters per line and maximum 2 lines per cue.',
+			'Calculates real-time reading speed metrics (CPS) to ensure caption text remains comfortable for general audiences.',
+			'Flags overlapping timestamps, zero-duration cues, and non-chronological cue orders before export.',
+			'Automates timeline quality checks directly in your browser with downloadable QC diagnostic reports.',
+		],
+		guides: [
+			{
+				id: 'cpl-and-cps-specifications',
+				kicker: 'International Specifications',
+				heading: 'Comparing Netflix, BBC, and EBU subtitle delivery standards',
+				paragraphs: [
+					'Major streaming platforms and television broadcasters enforce strict technical parameters on subtitle deliverables. Exceeding character limits or reading speed thresholds leads to automated quality control rejections at ingest.',
+					'Netflix mandates a maximum of 37 characters per line (CPL) for English dialogue, with a maximum reading speed of 17 characters per second (CPS) for adults and 13 CPS for children programming. The BBC guidelines permit up to 42 CPL, with recommended pacing between 160 and 180 words per minute.',
+				],
+				code: {
+					label: 'broadcast_standards_summary.txt',
+					source: `# International Broadcast Subtitle Specifications Summary
+Netflix English:
+- Maximum characters per line (CPL): 37
+- Maximum lines per subtitle cue: 2
+- Reading speed limit: 17 CPS (adults) / 13 CPS (children)
+- Minimum duration: 20 frames (approx 0.833s at 24 fps)
+- Maximum duration: 7 seconds
+- Shot changes: Maintain 2 to 3 frames gap across scene cuts
+
+BBC Subtitle Standards:
+- Maximum characters per line (CPL): 42
+- Maximum lines per subtitle cue: 2
+- Reading speed limit: 180 words per minute (approx 20 CPS)
+- Minimum duration: 1 second
+- Alignment: Centered or left-aligned on lower third
+`,
+				},
+			},
+			{
+				id: 'automated-timeline-qc',
+				kicker: 'Automated Ingest QC',
+				heading: 'Preventing subtitle ingestion errors with client-side timeline QC',
+				paragraphs: [
+					'Automatic speech recognition models frequently emit timing anomalies such as zero-duration cues, negative timestamps, reversed start-end ranges, and overlapping cues. Ingest systems in DaVinci Resolve, Premiere Pro, and broadcast QC platforms reject files with these defects.',
+					'This tool integrates an automated timeline QC engine that flags invalid timestamps, non-finite values, and cue overlaps in real time. You can review issue summaries directly in the browser and download a diagnostic .qc.txt report alongside clean SRT files.',
+				],
+				bullets: [
+					'Overlapping cues: Detects when cue N starts before cue N-1 finishes, preventing video editor timeline collisions.',
+					'Reading speed warning: Highlights cues where rapid speech exceeds 22 characters per second.',
+					'Safe timecode clamping: Automatically clamps negative timecode offsets to 00:00:00,000 to keep tracks valid.',
+				],
+				links: [
+					{
+						href: '/premiere-pro-srt-import/',
+						label: 'Premiere Pro import troubleshooting',
+					},
+					{
+						href: '/davinci-resolve-subtitle-import-error/',
+						label: 'DaVinci Resolve timeline sync fix',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'What is the difference between CPL and CPS in subtitling?',
+				answer:
+					'CPL stands for Characters Per Line, representing horizontal text width (typically 37 to 42 characters). CPS stands for Characters Per Second, representing viewer reading speed (typically 15 to 20 characters per second). Both must be satisfied for broadcast compliance.',
+			},
+			{
+				question: 'Why do broadcast platforms reject subtitles that cross shot changes?',
+				answer:
+					'When a subtitle cue appears right before a visual camera cut and lingers into the next shot, viewers reflexively re-read the cue. Guidelines require either cutting the cue before the shot change or snapping it across the cut with at least 2 frames gap.',
+			},
+			{
+				question: 'How does JsonToSrt help pass automated broadcast QC?',
+				answer:
+					'The built-in timeline QC engine identifies issue codes including overlap, zero-duration, reversed-range, and unrepresentable-time, ensuring exported subtitles conform to industry delivery rules.',
+			},
+			{
+				question: 'What is the minimum recommended subtitle cue duration?',
+				answer:
+					'Most broadcasters require a minimum duration of 20 frames (approx 0.833 seconds at 24 fps) or 1.0 second, even for short single-word utterances like "Yes" or "No", allowing viewers time to perceive and process the text.',
+			},
+		],
+	},
+	{
+		slug: 'elevenlabs-scribe-json-to-srt',
+		path: '/elevenlabs-scribe-json-to-srt/',
+		navLabel: 'ElevenLabs Scribe',
+		h1: 'ElevenLabs Scribe JSON to SRT Converter',
+		seoTitle: 'ElevenLabs Scribe JSON to SRT | Word Timestamps to Subtitles',
+		metaDescription:
+			'Convert ElevenLabs Scribe speech-to-text JSON transcripts with word-level timestamps to SRT and VTT subtitles locally in your browser.',
+		primaryKeyword: 'elevenlabs scribe json to srt',
+		heroSummary:
+			'Transform ElevenLabs Scribe speech-to-text JSON files into broadcast-safe SubRip SRT and WebVTT caption tracks. Uses word-level start and end timestamps to reflow text into readable subtitle blocks for vertical reels and long-form video.',
+		defaultSampleId: 'openai-verbose-json',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Extracts word-level timestamps from ElevenLabs Scribe speech-to-text API outputs.',
+			'Wraps word sequences on word boundaries up to 42 characters per line for horizontal video or 16 characters for vertical video.',
+			'Preserves precise speech timing while eliminating single-syllable visual clutter.',
+			'Runs 100% locally in browser memory without transmitting transcript contents over external networks.',
+		],
+		guides: [
+			{
+				id: 'elevenlabs-scribe-api',
+				kicker: 'Scribe Speech-to-Text',
+				heading: 'Requesting word-level transcripts with ElevenLabs Scribe',
+				paragraphs: [
+					'ElevenLabs Scribe provides speech-to-text transcription with word-level alignment, supporting content creators who pair realistic voice synthesis with accurate video subtitles.',
+					'Scribe returns timed word objects with floating-point start and end seconds. Saving this raw output enables dynamic re-chunking into standard broadcast subtitles or single-line vertical captions without repeating transcription calls.',
+				],
+				code: {
+					label: 'call_elevenlabs_scribe.py',
+					source: `import requests
+import json
+
+api_key = "your_elevenlabs_api_key"
+url = "https://api.elevenlabs.io/v1/speech-to-text"
+
+headers = {"xi-api-key": api_key}
+files = {"file": open("voiceover.mp3", "rb")}
+data = {"model_id": "scribe_v1", "timestamps_granularity": "word"}
+
+response = requests.post(url, headers=headers, files=files, data=data)
+result = response.json()
+
+with open("scribe_transcript.json", "w", encoding="utf-8") as f:
+    json.dump(result, f, indent=2)
+
+print("Saved scribe_transcript.json for local subtitle conversion.")
+`,
+				},
+			},
+			{
+				id: 'social-caption-reflow',
+				kicker: 'Caption Pacing',
+				heading: 'Reflowing Scribe timestamps for high-retention social captions',
+				paragraphs: [
+					'Raw speech-to-text output often runs as a single continuous transcript stream. When imported directly into video editors, long text blocks obscure facial expressions and overwhelm viewers.',
+					'This workbench allows you to select custom line widths from 16 to 42 characters and configure pause thresholds. Word tokens are partitioned dynamically, snapping caption cues to spoken vocal emphasis.',
+				],
+				bullets: [
+					'Vertical safe zones: Switch to 16 characters per line for TikTok and Instagram Reels formatting.',
+					'Desktop broadcast mode: Switch to 42 characters across 2 lines for YouTube, Vimeo, and corporate video.',
+					'Zero privacy risk: All JSON parsing and file downloads happen locally in your browser memory.',
+				],
+				links: [
+					{
+						href: '/short-video-caption-splitter/',
+						label: '16-character single-line caption preset',
+					},
+					{
+						href: '/whisper-verbose-json-to-srt/',
+						label: 'OpenAI Whisper verbose_json converter',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'How do I convert ElevenLabs Scribe word timestamps into SRT subtitles?',
+				answer:
+					'Save the JSON response returned by ElevenLabs Scribe containing word start and end floats. Drop the file into this converter, select your preferred line length (16 or 42 characters), and click Download SRT.',
+			},
+			{
+				question: 'Can I export WebVTT for web video players instead of SRT?',
+				answer:
+					'Yes. Select WebVTT from the output format dropdown to export compliant .vtt caption files with dot-millisecond timestamps and the mandatory WEBVTT file header.',
+			},
+			{
+				question: 'Does this converter require an ElevenLabs API key?',
+				answer:
+					'No. This tool runs entirely in your browser as a client-side utility. You only need your already-saved Scribe JSON transcript file.',
+			},
+			{
+				question: 'How are punctuation marks handled in the exported subtitles?',
+				answer:
+					'Punctuation marks returned alongside Scribe word tokens are automatically merged onto preceding words, preventing awkward line breaks or isolated punctuation cues.',
+			},
+		],
+	},
+	{
+		slug: 'aws-transcribe-json-to-srt',
+		path: '/aws-transcribe-json-to-srt/',
+		navLabel: 'AWS Transcribe',
+		h1: 'AWS Transcribe JSON to SRT Converter',
+		seoTitle: 'AWS Transcribe JSON to SRT | Results Items to Subtitles',
+		metaDescription:
+			'Convert Amazon AWS Transcribe JSON output into clean SRT, VTT, or TXT subtitle files locally in your browser with punctuation alignment.',
+		primaryKeyword: 'aws transcribe json to srt',
+		heroSummary:
+			'Convert Amazon Transcribe JSON job files into clean SubRip SRT, WebVTT, or CSV subtitles. Resolves AWS separate punctuation items, normalizes word timing offsets, and formats balanced subtitle lines with zero file size restrictions.',
+		defaultSampleId: 'assemblyai-utterances',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Interprets Amazon Transcribe results.items[] lists containing pronunciation and punctuation entries.',
+			'Attaches un-timed punctuation items to preceding words so commas and periods never trigger orphaned subtitle lines.',
+			'Converts string-encoded seconds into precise numerical timestamp offsets.',
+			'Processes large multi-megabyte enterprise transcription payloads in browser memory with zero server round-trips.',
+		],
+		guides: [
+			{
+				id: 'aws-transcribe-items-structure',
+				kicker: 'Cloud ASR Architecture',
+				heading: 'Understanding Amazon Transcribe JSON schema and item types',
+				paragraphs: [
+					'Amazon Transcribe outputs a comprehensive JSON structure where transcript words and punctuation marks are separated into distinct objects inside the results.items[] array.',
+					'Pronunciation items carry start_time and end_time strings along with confidence ratings, while punctuation items carry only the punctuation symbol without timestamps. A standard JSON parser must attach punctuation items to the preceding word before calculating line wraps.',
+				],
+				code: {
+					label: 'convert_aws_transcribe.py',
+					source: `import json
+
+# Normalize AWS Transcribe results.items into structured timed segments
+def normalize_aws_transcribe(aws_json_path, output_json_path):
+    with open(aws_json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    items = data["results"]["items"]
+    words = []
+    
+    for item in items:
+        if item["type"] == "pronunciation":
+            words.append({
+                "word": item["alternatives"][0]["content"],
+                "start": float(item["start_time"]),
+                "end": float(item["end_time"]),
+            })
+        elif item["type"] == "punctuation" and words:
+            # Attach punctuation to preceding word
+            words[-1]["word"] += item["alternatives"][0]["content"]
+    
+    payload = {"words": words}
+    with open(output_json_path, "w", encoding="utf-8") as out:
+        json.dump(payload, out, indent=2)
+
+normalize_aws_transcribe("aws_job_output.json", "normalized_for_srt.json")
+`,
+				},
+			},
+			{
+				id: 'punctuation-and-channel-handling',
+				kicker: 'Audio Channels and Diarization',
+				heading: 'Handling multi-channel recordings and speaker labels in AWS Transcribe',
+				paragraphs: [
+					'In contact center recordings and dual-channel podcast audio, Amazon Transcribe records speaker channels separately. Channel identification flags and speaker diarization segments are stored in results.channel_labels or results.speaker_labels.',
+					'Our client-side tool handles multi-megabyte enterprise AWS Transcribe files without cloud queues or file size limits, wrapping dialogue into compliant subtitle tracks ready for NLE timelines.',
+				],
+				bullets: [
+					'Clean punctuation binding: Eliminates orphaned commas or question marks on fresh subtitle lines.',
+					'Broadcast line wrapping: Wraps dialogue at natural word boundaries up to 42 characters per line.',
+					'Complete privacy: Converts corporate conference and call center audio transcripts offline in browser RAM.',
+				],
+				links: [
+					{
+						href: '/assemblyai-json-to-srt/',
+						label: 'AssemblyAI utterances JSON converter',
+					},
+					{
+						href: '/broadcast-subtitle-qc-standards/',
+						label: 'Broadcast subtitle QC standards guide',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'Why does AWS Transcribe separate punctuation from words?',
+				answer:
+					'Amazon Transcribe models punctuation as distinct token events rather than word suffixes. This allows acoustic confidence scores to apply strictly to spoken vocabulary while punctuation represents syntactic prediction.',
+			},
+			{
+				question: 'Can I convert AWS Transcribe files larger than 10 MB?',
+				answer:
+					'Yes. Because conversion executes locally in browser JavaScript using File.text() and Blob streams, multi-hour enterprise transcripts convert in milliseconds without upload limits.',
+			},
+			{
+				question: 'How do I export WebVTT for web players from AWS Transcribe JSON?',
+				answer:
+					'Select WebVTT from the output format menu. The engine serializes clean dot-millisecond timestamps and the required WEBVTT file header for HTML5 video playback.',
+			},
+			{
+				question: 'Are my AWS Transcribe files sent to any third-party server?',
+				answer:
+					'No. All data processing occurs strictly in your local browser tab. Zero transcript contents or account metadata are transmitted over external networks.',
+			},
+		],
+	},
+	{
+		slug: 'davinci-resolve-subtitle-import-error',
+		path: '/davinci-resolve-subtitle-import-error/',
+		navLabel: 'DaVinci Resolve Fix',
+		h1: 'Fix DaVinci Resolve Subtitle Import Errors and Sync Issues',
+		seoTitle: 'DaVinci Resolve Subtitle Import Error | SRT Sync & Overlap Fix',
+		metaDescription:
+			'Troubleshoot DaVinci Resolve SRT subtitle import errors: fix timecode mismatch, cue overlap rejection, and non-dropframe frame rate drift.',
+		primaryKeyword: 'davinci resolve subtitle import error',
+		heroSummary:
+			'Fix common DaVinci Resolve subtitle import errors, non-showing SRT tracks, timecode drift, and cue overlap rejections. Re-export clean, frame-accurate SubRip subtitles from raw transcription JSON directly in your browser.',
+		defaultSampleId: 'premiere-source-json',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Generates clean SubRip formatting strictly adhering to DaVinci Resolve subtitle track parser requirements.',
+			'Enforces non-overlapping cue boundaries to prevent timeline track import rejection.',
+			'Applies millisecond offset adjustments to compensate for 23.976 fps versus 24.0 fps project frame rate drift.',
+			'Outputs UTF-8 text without byte order marks (BOM) to eliminate character rendering glitches.',
+		],
+		guides: [
+			{
+				id: 'davinci-import-rejection-causes',
+				kicker: 'Timeline Ingestion Troubleshooting',
+				heading: 'Why DaVinci Resolve rejects or misaligns imported SRT files',
+				paragraphs: [
+					'DaVinci Resolve features a dedicated Subtitle Track on its Edit and Cut pages. However, its internal subtitle parser is substantially stricter than consumer media players like VLC.',
+					'The three most frequent causes of DaVinci Resolve subtitle failures are: overlapping cue timestamps on a single track, frame rate timecode drift between 23.976 fps and 24.0 fps timelines, and hidden UTF-8 BOM characters that cause Resolve to skip the first subtitle cue.',
+				],
+				code: {
+					label: 'davinci_resolve_timeline_checklist.txt',
+					source: `# DaVinci Resolve Subtitle Troubleshooting Checklist
+1. Cue Overlaps:
+   Resolve does not allow two subtitle cues to share the same millisecond range on a single track.
+   Ensure end time of cue N is less than or equal to start time of cue N+1.
+
+2. Frame Rate Matching:
+   Check Project Settings -> Master Settings -> Timeline Frame Rate.
+   If video is 23.976 fps, ensure audio and transcription offsets are not calculated at 29.97 fps drop-frame.
+
+3. File Encoding:
+   File must be UTF-8 without BOM.
+   Timestamps must use comma separator: 00:00:01,500 --> 00:00:04,200.
+   Cue numbers must be sequential positive integers starting at 1.
+`,
+				},
+			},
+			{
+				id: 'resolving-overlap-and-framerate-drift',
+				kicker: 'Automated Repair',
+				heading: 'Fixing overlaps and sync offsets with JsonToSrt timeline QC',
+				paragraphs: [
+					'When ASR tools produce overlapping cue timings, importing into DaVinci Resolve results in red warning banners or dropped lines. Our tool automatically inspects cue boundaries and flags overlaps before you export.',
+					'Furthermore, if audio begins a few frames ahead of your video cut, you can adjust the Sync Offset slider to shift all subtitle cues forward or backward in 50 ms increments with instant visual verification.',
+				],
+				bullets: [
+					'Zero BOM UTF-8: Re-exports clean subtitle files guaranteed free of invisible byte order marks.',
+					'Frame-accurate offsets: Compensate for head leader audio padding or slate countdowns.',
+					'Single blank line separator: Guarantees strict SubRip standard compliance for NLE timeline parsers.',
+				],
+				links: [
+					{
+						href: '/premiere-pro-srt-import/',
+						label: 'Premiere Pro SRT import troubleshooting guide',
+					},
+					{
+						href: '/broadcast-subtitle-qc-standards/',
+						label: 'Broadcast subtitle QC standards guide',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'Why does DaVinci Resolve fail to import my SRT subtitle file?',
+				answer:
+					'Resolve rejects subtitle files that contain overlapping timestamps on the same track, missing blank lines between cues, or non-UTF-8 character encoding. Converting your raw transcript JSON here guarantees clean, valid SRT syntax.',
+			},
+			{
+				question: 'How do I fix subtitles that slowly drift out of sync in DaVinci Resolve?',
+				answer:
+					'Sync drift usually occurs when your timeline frame rate (e.g., 23.976 fps) does not match the source recording frame rate (e.g., 24.0 or 29.97 fps). Ensure your project settings match the source footage, or apply a uniform millisecond offset.',
+			},
+			{
+				question: 'Can I style DaVinci Resolve subtitles after importing the SRT?',
+				answer:
+					'Yes. Once the SRT is on the subtitle track, open the Inspector panel in Resolve to customize font family, size, stroke outline, drop shadow, and background box across the entire track simultaneously.',
+			},
+			{
+				question: 'Does this tool support multiple subtitle tracks for different languages in Resolve?',
+				answer:
+					'Yes. You can convert multiple JSON files into separate SRT files and import each onto its own dedicated subtitle track in DaVinci Resolve.',
+			},
+		],
+	},
+	{
+		slug: 'whisper-hallucination-timestamp-desync',
+		path: '/whisper-hallucination-timestamp-desync/',
+		navLabel: 'Whisper Hallucination',
+		h1: 'Whisper Hallucination and Timestamp Desync Troubleshooting',
+		seoTitle: 'Whisper Hallucination Timestamp Desync | Fix Audio Drift and Loops',
+		metaDescription:
+			'Troubleshoot Whisper subtitle hallucination loops and timestamp desync: diagnose silent repetition, attention collapse, and repair drifted cues.',
+		primaryKeyword: 'whisper hallucination timestamp desync',
+		heroSummary:
+			'Diagnose and fix Whisper subtitle timestamp desynchronization, repetitive hallucination loops, and silent drift. Understand decoder attention degradation and use automated timeline QC to isolate and repair damaged subtitle cues.',
+		defaultSampleId: 'openai-verbose-json',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Detects common Whisper failure modes including repetitive text loops and runaway timestamp offsets.',
+			'Identifies anomalous cue durations and unrepresentable timing values using client-side timeline QC.',
+			'Enables visual inspection of suspect segments before exporting finalized SubRip or WebVTT files.',
+			'Provides recommended Whisper inference parameter configurations to suppress hallucinations at the source.',
+		],
+		guides: [
+			{
+				id: 'whisper-hallucination-mechanisms',
+				kicker: 'Decoder Failure Modes',
+				heading: 'Why Whisper hallucinates and gets trapped in repetition loops',
+				paragraphs: [
+					'OpenAI Whisper uses an autoregressive sequence-to-sequence transformer architecture. During prolonged audio silence, low-volume background noise, or background music passages, the acoustic encoder supplies weak conditioning tokens to the text decoder.',
+					'Under these conditions, the decoder attention mechanism often collapses, repeating the same phrase (such as "Thank you for watching" or "Subtitles by...") dozens of times while timestamp counters advance uncontrollably into the future.',
+				],
+				code: {
+					label: 'whisper_anti_hallucination_params.py',
+					source: `import whisper
+
+model = whisper.load_model("medium")
+
+# Recommended hyperparameters to suppress silent hallucinations and repetition loops
+result = model.transcribe(
+    "difficult_audio.mp3",
+    word_timestamps=True,
+    condition_on_previous_text=False,  # Prevents error cascading across 30s windows
+    compression_ratio_threshold=2.4,   # Detects and discards repetitive text loops
+    no_speech_threshold=0.6,           # Skips silent segments cleanly
+    logprob_threshold=-1.0,            # Filters low-confidence transcript segments
+    temperature=(0.0, 0.2, 0.4, 0.6),  # Falls back to higher temperature if stuck
+)
+`,
+				},
+			},
+			{
+				id: 'pruning-hallucinated-cues',
+				kicker: 'Quality Control and Repair',
+				heading: 'Isolating and pruning damaged cues with client-side timeline QC',
+				paragraphs: [
+					'When an audio recording already contains hallucination loops, re-running expensive cloud transcription is not always feasible. Our built-in timeline QC engine identifies anomalous cue durations, timestamp inversions, and cue overlaps instantly.',
+					'You can inspect flagged cues in the timeline QC summary, remove repetitive sentences directly in the editable text pane, and export clean, broadcast-ready subtitles with verified reading speed.',
+				],
+				bullets: [
+					'Condition on previous text: Disabling this parameter in Whisper prevents repetitive hallucinations from spreading across audio chunks.',
+					'Compression ratio threshold: Whisper automatically flags segments where zlib compression indicates severe repetition.',
+					'Timeline QC validation: Check issue codes to guarantee zero corrupted timestamps before video publishing.',
+				],
+				links: [
+					{
+						href: '/broadcast-subtitle-qc-standards/',
+						label: 'Broadcast subtitle QC standards guide',
+					},
+					{
+						href: '/faster-whisper-srt/',
+						label: 'faster-whisper JSON guide and export',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'What causes Whisper to repeat the same phrase repeatedly in subtitles?',
+				answer:
+					'Autoregressive language models hallucinate when acoustic audio signals are ambiguous or silent. Setting condition_on_previous_text=False stops previous hallucinated tokens from biasing subsequent audio windows.',
+			},
+			{
+				question: 'Why do Whisper timestamps suddenly jump forward by several minutes?',
+				answer:
+					'When Whisper fails to align speech within a 30-second window, it may skip timestamps to the end of the window. Inspecting the JSON in our converter reveals whether word timestamps or segment timestamps drifted.',
+			},
+			{
+				question: 'How do I remove hallucinated cues without re-transcribing the whole file?',
+				answer:
+					'Paste your transcript JSON into this converter, locate the flagged cues using the Timeline QC panel, delete or edit the corrupted text lines in the editor, and click Download SRT.',
+			},
+			{
+				question: 'Does temperature fallback help prevent Whisper hallucinations?',
+				answer:
+					'Yes. Passing a tuple of temperatures like (0.0, 0.2, 0.4, 0.6) allows Whisper to increase randomness when repetition or low average log probabilities are detected, helping it break out of silent loops.',
+			},
+		],
+	},
 ];
 
 export const LONG_TAIL_WORKFLOW_CARDS: WorkflowLinkCard[] = [
@@ -534,5 +1193,59 @@ export const LONG_TAIL_WORKFLOW_CARDS: WorkflowLinkCard[] = [
 		presetConfig: '.srt | Speaker N prefixes',
 		summary:
 			'Export the existing Deepgram parser from a two-speaker utterances sample. Channel-only words stay unused.',
+	},
+	{
+		slug: 'assemblyai-json-to-srt',
+		path: '/assemblyai-json-to-srt/',
+		badge: 'AssemblyAI',
+		anchorText: 'AssemblyAI utterances JSON to SRT',
+		presetConfig: '.srt | ms utterances',
+		summary:
+			'Convert AssemblyAI integer millisecond utterance and word JSON transcripts into clean speaker-prefixed subtitles.',
+	},
+	{
+		slug: 'broadcast-subtitle-qc-standards',
+		path: '/broadcast-subtitle-qc-standards/',
+		badge: 'QC Standards',
+		anchorText: 'Broadcast subtitle QC standards guide',
+		presetConfig: '.srt | Netflix & BBC specs',
+		summary:
+			'Learn broadcast quality standards: CPL limits, reading speed CPS thresholds, and automated timeline QC checks.',
+	},
+	{
+		slug: 'elevenlabs-scribe-json-to-srt',
+		path: '/elevenlabs-scribe-json-to-srt/',
+		badge: 'ElevenLabs Scribe',
+		anchorText: 'ElevenLabs Scribe word JSON to SRT',
+		presetConfig: '.srt | word timestamps',
+		summary:
+			'Convert ElevenLabs Scribe speech-to-text JSON transcripts with word-level alignment into clean subtitles.',
+	},
+	{
+		slug: 'aws-transcribe-json-to-srt',
+		path: '/aws-transcribe-json-to-srt/',
+		badge: 'AWS Transcribe',
+		anchorText: 'AWS Transcribe results items to SRT',
+		presetConfig: '.srt | punctuation binding',
+		summary:
+			'Convert Amazon AWS Transcribe JSON items into formatted SubRip subtitles with automated punctuation alignment.',
+	},
+	{
+		slug: 'davinci-resolve-subtitle-import-error',
+		path: '/davinci-resolve-subtitle-import-error/',
+		badge: 'DaVinci Resolve',
+		anchorText: 'Fix DaVinci Resolve subtitle import errors',
+		presetConfig: '.srt | zero overlaps',
+		summary:
+			'Resolve DaVinci Resolve subtitle import errors, frame rate timecode drift, and cue overlap rejections.',
+	},
+	{
+		slug: 'whisper-hallucination-timestamp-desync',
+		path: '/whisper-hallucination-timestamp-desync/',
+		badge: 'Whisper QC Fix',
+		anchorText: 'Whisper hallucination and drift troubleshooting',
+		presetConfig: '.srt | loop pruning',
+		summary:
+			'Diagnose and fix Whisper subtitle timestamp desynchronization, silent loops, and corrupted cue intervals.',
 	},
 ];

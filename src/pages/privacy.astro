@@ -155,17 +155,30 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 
 		<section class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-4">
 			<h2 class="text-xl font-bold text-slate-950">
-				4. Cookies and Opt-Out Rights
+				4. Cookies, Google AdSense, and Opt-Out Controls
 			</h2>
 			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
-				The core subtitle converter sets zero functional or authentication cookies and does not use <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">localStorage</code> or <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">IndexedDB</code> to persist transcripts. When GA4 loads on the production site, Google sets first-party measurement cookies (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga</code> and <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga_*</code>) to distinguish aggregate sessions.
-			</p>
-			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
-				You can block or opt out of GA4 measurement at any time with zero degradation to converter functionality:
+				The core subtitle converter sets zero functional or authentication cookies and does not use <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">localStorage</code> or <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">IndexedDB</code> to persist transcripts. When telemetry or advertising scripts load on the production site, the following third-party cookies and measurement tokens apply:
 			</p>
 			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
-				<li>Use privacy-focused browsers (such as Brave, Firefox Enhanced Tracking Protection, or Safari Intelligent Tracking Prevention) or content blockers (such as uBlock Origin), which block <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">googletagmanager.com</code> scripts while keeping all local parsing intact.</li>
-				<li>Install the official <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Google Analytics Opt-out Browser Add-on</a>.</li>
+				<li>
+					<strong>Google Analytics 4:</strong> Sets first-party measurement cookies (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga</code> and <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">_ga_*</code>) to distinguish aggregate visitor sessions. IP anonymization is enforced and advertising personalization is disabled for telemetry.
+				</li>
+				<li>
+					<strong>Google AdSense and DoubleClick:</strong> Google and third-party vendors use cookies (including the DoubleClick DART cookie) to serve ads based on prior visits to this website or other sites on the Internet. Google advertising cookie policies allow Google and its partners to serve targeted ads based on your visit history.
+				</li>
+				<li>
+					<strong>European Consent (CMP / TCF v2.2):</strong> For visitors in the European Economic Area (EEA), United Kingdom, and Switzerland, Google AdSense requires an IAB TCF v2.2 certified Consent Management Platform. You can grant, customize, or revoke consent for personalized advertising cookies at any time through the on-site privacy settings or CMP prompt.
+				</li>
+			</ul>
+			<p class="text-sm sm:text-base text-slate-700 leading-relaxed">
+				You can block, opt out of, or customize advertising cookies at any time with zero impact on subtitle converter functionality:
+			</p>
+			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+				<li>Manage Google ad personalization settings directly at <a href="https://www.google.com/settings/ads" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Google Ads Settings</a>.</li>
+				<li>Opt out of third-party vendor cookies across advertising networks via the <a href="https://www.aboutads.info/choices/" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Digital Advertising Alliance WebChoices tool</a> or <a href="https://www.youronlinechoices.com/" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Your Online Choices (Europe)</a>.</li>
+				<li>Install the official <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener noreferrer" class="text-sky-700 font-medium hover:underline">Google Analytics Opt-out Browser Add-on</a> to disable GA4 measurement.</li>
+				<li>Use privacy-focused browsers or content blockers (such as Brave, Firefox Tracking Protection, or uBlock Origin), which block tracking requests while leaving local browser transcript conversion completely functional.</li>
 				<li>Clear cookies for <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code> in your browser site settings at any time.</li>
 			</ul>
 		</section>
@@ -176,10 +189,10 @@ const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 			</h2>
 			<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
 				<li>
-					<strong>European Economic Area and UK visitors (GDPR / UK GDPR):</strong> Because transcript conversion happens strictly on your own device, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code> never acts as a processor or controller of personal data contained inside your audio transcripts. For email correspondence you initiate, we process your message to respond to your inquiry and delete support threads upon request.
+					<strong>European Economic Area and UK visitors (GDPR / UK GDPR):</strong> Because transcript conversion happens strictly on your own device, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">jsontosrt.com</code> never acts as a processor or controller of personal data contained inside your audio transcripts. For email correspondence you initiate, we process your message to respond to your inquiry and delete support threads upon request. Third-party advertising partners process cookie data only subject to valid user consent collected through certified consent mechanisms.
 				</li>
 				<li>
-					<strong>California residents (CCPA / CPRA):</strong> We do not sell or share personal information as defined under the California Consumer Privacy Act, and we do not engage in cross-context behavioral advertising.
+					<strong>California residents (CCPA / CPRA):</strong> We do not sell personal information as defined under California law. Where third-party advertising cookies constitute sharing for cross-context behavioral advertising under the CPRA, California residents have the right to opt out using the cookie opt-out links above or by broadcasting the Global Privacy Control (GPC) signal.
 				</li>
 				<li>
 					<strong>Exercising your rights:</strong> To request access to or deletion of any email correspondence sent to us, or to ask a privacy question, contact <a href="mailto:hello@jsontosrt.com" class="font-mono font-semibold text-sky-800 underline underline-offset-4 break-words">hello@jsontosrt.com</a>. Also review our <a href="/about/" class="text-sky-800 font-medium underline underline-offset-4">About page</a> and <a href="/terms/" class="text-sky-800 font-medium underline underline-offset-4">Terms of Use</a>.

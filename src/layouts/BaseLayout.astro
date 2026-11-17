@@ -135,6 +135,7 @@ const jsonLdGraph = {
 const jsonLdSerialized = JSON.stringify(jsonLdGraph).replace(/</g, '\\u003c');
 const ga4MeasurementId = (import.meta.env.PUBLIC_GA4_MEASUREMENT_ID ?? '').trim();
 const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim();
+const adsenseClientId = 'ca-pub-9938576884024908';
 ---
 
 <!doctype html>
@@ -170,7 +171,7 @@ const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim(
 		<meta name="twitter:image" content={ogImageUrl} />
 
 		<script is:inline type="application/ld+json" set:html={jsonLdSerialized} />
-		<script is:inline define:vars={{ ga4MeasurementId, clarityProjectId }}>
+		<script is:inline define:vars={{ ga4MeasurementId, clarityProjectId, adsenseClientId }}>
 			(function () {
 				if (window.__jsonToSrtAnalyticsBootstrap) return;
 				window.__jsonToSrtAnalyticsBootstrap = true;
@@ -301,6 +302,22 @@ const clarityProjectId = (import.meta.env.PUBLIC_CLARITY_PROJECT_ID ?? '').trim(
 							'https://www.clarity.ms/tag/' + encodeURIComponent(clarityProjectId);
 						document.head.appendChild(clarityScript);
 					}
+				}
+
+				const isLiveAdSense =
+					!isLocalHost &&
+					host === 'jsontosrt.com' &&
+					typeof adsenseClientId === 'string' &&
+					/^ca-pub-\d+$/.test(adsenseClientId);
+
+				if (isLiveAdSense) {
+					const adsenseScript = document.createElement('script');
+					adsenseScript.async = true;
+					adsenseScript.crossOrigin = 'anonymous';
+					adsenseScript.src =
+						'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' +
+						encodeURIComponent(adsenseClientId);
+					document.head.appendChild(adsenseScript);
 				}
 			})();
 		</script>

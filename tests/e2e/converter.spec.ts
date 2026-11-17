@@ -467,6 +467,36 @@ test.describe('Whisper JSON to SRT converter journeys', () => {
 				status: /Deepgram Nova JSON/,
 				output: /\[Speaker 0\]/,
 			},
+			{
+				path: '/assemblyai-json-to-srt/',
+				status: /AssemblyAI/,
+				output: /AssemblyAI/,
+			},
+			{
+				path: '/broadcast-subtitle-qc-standards/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /Welcome/,
+			},
+			{
+				path: '/elevenlabs-scribe-json-to-srt/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /Welcome/,
+			},
+			{
+				path: '/aws-transcribe-json-to-srt/',
+				status: /AssemblyAI/,
+				output: /AssemblyAI/,
+			},
+			{
+				path: '/davinci-resolve-subtitle-import-error/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /José/,
+			},
+			{
+				path: '/whisper-hallucination-timestamp-desync/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /Welcome/,
+			},
 		];
 
 		for (const route of routes) {

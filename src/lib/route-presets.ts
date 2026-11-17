@@ -75,6 +75,60 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 					'Positive or negative millisecond offsets shift every cue start and end timestamp uniformly, while clamping any resulting negative timestamp at 00:00:00,000 so video editors and media players never reject the generated subtitle track.',
 			},
 		],
+		guides: [
+			{
+				id: 'pipeline-overview',
+				kicker: 'Production ASR Pipeline',
+				heading: 'From raw speech audio to broadcast-ready subtitle cues',
+				paragraphs: [
+					'Running speech-to-text models like OpenAI Whisper, faster-whisper, or Deepgram is only the first half of subtitle generation. Speech recognition decoders prioritize acoustic probabilities across 30-second audio windows, often yielding single continuous segments that stretch over 80 characters without respect for video frame boundaries or viewer reading speeds.',
+					'Saving your transcription as rich JSON rather than flat SRT preserves precise word timestamps, speaker labels, and acoustic confidence scores. This converter runs locally in your browser to reflow those timed word tokens into balanced, readable subtitle cues conforming to international broadcast specifications.',
+				],
+				code: {
+					label: 'run_whisper_export_json.py',
+					source: `import json
+import whisper
+
+model = whisper.load_model("base")
+result = model.transcribe(
+    "podcast_episode.mp3",
+    word_timestamps=True,
+    verbose=False,
+)
+
+# Preserve the full JSON payload with word timestamps
+with open("transcript_raw.json", "w", encoding="utf-8") as f:
+    json.dump(result, f, ensure_ascii=False, indent=2)
+
+print("Transcription saved. Drop transcript_raw.json into the converter above.")
+`,
+				},
+			},
+			{
+				id: 'reading-speed-rules',
+				kicker: 'Visual Timing Standards',
+				heading: 'Balancing line width, pause splits, and characters per second',
+				paragraphs: [
+					'Professional subtitling requires adhering to two fundamental visual constraints: maximum line width (CPL) and reading speed (CPS). Standard broadcast delivery (EBU and Netflix) mandates a maximum of 37 to 42 characters per line and no more than two lines per cue, ensuring text never covers critical visual elements.',
+					'Equally vital is reading speed management. Adult viewers comfortably process between 15 and 20 characters per second. When speech accelerates beyond 22 CPS, subtitle reading degrades into a stressful chore. This tool evaluates CPS live for every cue, flagging congested lines before export.',
+				],
+				bullets: [
+					'Natural pause splitting: When speakers pause for more than 0.6 seconds, cues split automatically to maintain natural cadence.',
+					'Zero server upload: Every file operation happens in browser memory using File.text() and Blob URLs, protecting client confidentiality.',
+					'Universal format compatibility: Export SubRip (.srt), WebVTT (.vtt), plain text (.txt), or CSV (.csv) with millisecond accuracy.',
+				],
+				links: [
+					{
+						href: '/whisper-verbose-json-to-srt/',
+						label: 'OpenAI Whisper verbose_json preset',
+					},
+					{
+						href: '/short-video-caption-splitter/',
+						label: 'Vertical video 16-character caption preset',
+					},
+				],
+			},
+		],
 	},
 	{
 		slug: 'whisper-verbose-json-to-srt',
@@ -118,6 +172,60 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 				question: 'How are Whisper leading spaces and punctuation tokens cleaned up?',
 				answer:
 					'Whisper tokenizers prefix most English words with a leading space and sometimes emit standalone punctuation entries. The cue builder trims leading line spaces and merges detached punctuation onto the preceding word before counting characters per line.',
+			},
+		],
+		guides: [
+			{
+				id: 'api-verbose-json-capture',
+				kicker: 'OpenAI API Integration',
+				heading: 'Requesting verbose_json with word-level timestamps',
+				paragraphs: [
+					'The OpenAI /v1/audio/transcriptions endpoint defaults to returning a simple JSON object containing only a single text string. To obtain timestamped subtitle data, you must explicitly specify response_format="verbose_json" and pass timestamp_granularities=["word", "segment"].',
+					'With word-level granularity enabled, OpenAI returns both coarse segment ranges and precise floating-point start and end times for every spoken word token. Storing this verbose_json payload lets you rebuild subtitles with custom line lengths whenever required without re-calling the paid API.',
+				],
+				code: {
+					label: 'openai_transcribe_verbose.py',
+					source: `from openai import OpenAI
+import json
+
+client = OpenAI()
+
+with open("interview.mp3", "rb") as audio_file:
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        response_format="verbose_json",
+        timestamp_granularities=["word", "segment"],
+    )
+
+with open("interview_verbose.json", "w", encoding="utf-8") as out:
+    out.write(transcript.model_dump_json(indent=2))
+`,
+				},
+			},
+			{
+				id: 'word-vs-segment-timings',
+				kicker: 'Timing Resolution',
+				heading: 'Why word-level tokens produce cleaner subtitle transitions',
+				paragraphs: [
+					'When using segment-only JSON, subtitle boundaries are locked to Whisper decoder chunk boundaries. A single segment might span 12 seconds with three sentences, resulting in unwieldy paragraphs that clutter the lower third of the video screen.',
+					'Our client-side parser leverages the nested words array to group tokens into balanced 42-character lines. When speech pauses exceed 0.6 seconds, the parser generates a fresh cue immediately, ensuring subtitles mirror natural vocal phrasing.',
+				],
+				bullets: [
+					'Proportional fallback: If word timestamps are missing, segments are partitioned proportionally by character count.',
+					'Leading space normalization: Word tokens beginning with spaces (e.g., " hello") are trimmed for accurate character counts.',
+					'Clean punctuation binding: Standalone punctuation tokens merge onto preceding words rather than forming orphaned cues.',
+				],
+				links: [
+					{
+						href: '/faster-whisper-srt/',
+						label: 'faster-whisper JSON guide and export',
+					},
+					{
+						href: '/whisper-json-to-vtt/',
+						label: 'Export HTML5 WebVTT (.vtt) format',
+					},
+				],
 			},
 		],
 	},
@@ -165,6 +273,55 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 					'Yes. Although this preset defaults to WebVTT output with an OpenAI Whisper sample, the input box and file uploader accept every supported JSON dialect, including diarized_json and plain CapCut drafts, and export any of them as .vtt.',
 			},
 		],
+		guides: [
+			{
+				id: 'vtt-syntax-standards',
+				kicker: 'W3C WebVTT Specification',
+				heading: 'Key formatting differences between SubRip (.srt) and WebVTT (.vtt)',
+				paragraphs: [
+					'WebVTT (Web Video Text Tracks) is the official W3C standard for HTML5 video captioning. While SubRip (.srt) uses sequential numeric cue identifiers and comma millisecond separators (00:01:23,456), WebVTT strictly requires a leading WEBVTT header and period millisecond separators (00:01:23.456).',
+					'Attempting to load a comma-separated SRT file inside an HTML5 <track> tag in modern browsers causes silent parsing failures. Converting Whisper JSON directly to WebVTT guarantees full compatibility across Chrome, Safari, Firefox, and mobile WebKit.',
+				],
+				code: {
+					label: 'html5_video_with_vtt.html',
+					source: `<video controls width="1080" height="720" poster="/poster.jpg">
+  <source src="/media/video.mp4" type="video/mp4" />
+  <track
+    kind="captions"
+    src="/subtitles/captions.vtt"
+    srclang="en"
+    label="English Captions"
+    default
+  />
+</video>
+`,
+				},
+			},
+			{
+				id: 'streaming-vtt-integration',
+				kicker: 'HLS and Cloud Video Delivery',
+				heading: 'Using WebVTT with HLS m3u8 playlists and web players',
+				paragraphs: [
+					'Modern streaming platforms like Video.js, Plyr, and HLS.js rely on WebVTT for adaptive bitrate video captions. WebVTT subtitle segments can be referenced directly within master .m3u8 playlists under the EXT-X-MEDIA SUBTITLES tag.',
+					'Because our converter outputs clean UTF-8 text with period-delimited timestamps and blank-line cue separators, the exported .vtt files require zero manual reformatting before deployment to CDNs or Cloudflare Stream buckets.',
+				],
+				bullets: [
+					'MIME type requirement: Ensure web servers serve .vtt files with text/vtt and UTF-8 charset headers.',
+					'Cross-origin access: Add Access-Control-Allow-Origin: * headers when caption tracks are hosted on external CDNs.',
+					'Cue settings support: Position and alignment tags can be customized in modern CSS using the ::cue pseudo-element.',
+				],
+				links: [
+					{
+						href: '/',
+						label: 'Standard SubRip (.srt) master converter',
+					},
+					{
+						href: '/about/',
+						label: 'Architecture and browser-local privacy guarantee',
+					},
+				],
+			},
+		],
 	},
 	{
 		slug: 'whisperx-diarized-json-to-srt',
@@ -208,6 +365,55 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 				question: 'What happens if I uncheck the speaker prefix toggle on a WhisperX file?',
 				answer:
 					'Unchecking Include speaker prefix hides the [SPEAKER_00] label from the exported SRT or VTT lines while still respecting speaker turn boundaries during cue segmentation.',
+			},
+		],
+		guides: [
+			{
+				id: 'whisperx-generation-workflow',
+				kicker: 'Multi-Speaker Diarization',
+				heading: 'Running WhisperX and pyannote to generate speaker-labeled JSON',
+				paragraphs: [
+					'WhisperX combines OpenAI Whisper speech recognition with wav2vec2 forced phoneme alignment and pyannote.audio speaker diarization. This three-stage pipeline produces word-level timestamps alongside speaker cluster IDs (such as SPEAKER_00 and SPEAKER_01).',
+					'Standard subtitle exporters struggle with diarized data because speaker turns often switch mid-sentence or within short pauses. This tool reads the speaker property on both segment and word levels, splitting cues on speaker transitions to prevent multi-speaker overlap.',
+				],
+				code: {
+					label: 'run_whisperx_diarize.sh',
+					source: `# Run WhisperX transcription with wav2vec2 alignment and pyannote diarization
+whisperx interview.wav \\
+  --model large-v2 \\
+  --align_model WAV2VEC2_ASR_LARGE_LV60K_960H \\
+  --diarize \\
+  --hf_token "hf_YourHuggingFaceTokenHere" \\
+  --output_format json \\
+  --output_dir ./transcripts
+
+# Load the resulting interview.json into the converter above
+`,
+				},
+			},
+			{
+				id: 'handling-unaligned-tokens',
+				kicker: 'Robust Token Parsing',
+				heading: 'Interpolating timestamps for numbers, symbols, and fast turns',
+				paragraphs: [
+					'In raw WhisperX output, acoustic phoneme aligners occasionally fail on non-phonetic tokens like numbers ("2026"), acronyms ("NASA"), or currency signs ("$50"). In these edge cases, WhisperX leaves the start and end properties undefined.',
+					'Our parser safely detects unaligned tokens and interpolates their timing from neighboring words. This prevents cue corruption and ensures speaker labels like [SPEAKER_00] are cleanly formatted at the beginning of each dialogue block.',
+				],
+				bullets: [
+					'Custom speaker naming: Edit SPEAKER_00 directly in the JSON pane to update all cue prefixes in real time.',
+					'Clean turn boundaries: A new cue starts immediately whenever a different speaker begins talking.',
+					'Toggleable speaker tags: Uncheck Include speaker prefix to preserve turn splitting without printing labels in the video.',
+				],
+				links: [
+					{
+						href: '/gpt-4o-transcribe-diarize-srt/',
+						label: 'OpenAI diarized_json converter preset',
+					},
+					{
+						href: '/deepgram-json-to-srt/',
+						label: 'Deepgram Nova multi-speaker utterances preset',
+					},
+				],
 			},
 		],
 	},
@@ -255,6 +461,53 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 					'The built-in -osrt flag in whisper.cpp dumps fixed decoder segments that frequently span 80 to 120 characters on a single line unless you re-run inference with --max-len and --split-on-word. Converting the saved JSON lets you tune line width, line count, and sync offsets in real time without re-running model inference.',
 			},
 		],
+		guides: [
+			{
+				id: 'whisper-cpp-cli-usage',
+				kicker: 'Local Offline Inference',
+				heading: 'Extracting millisecond JSON transcripts with whisper.cpp',
+				paragraphs: [
+					'whisper.cpp provides high-performance, lightweight Whisper inference optimized for Apple Silicon (Metal), Linux, and Windows via GGML and GGUF quantization. Running local inference keeps sensitive interviews and voice notes entirely on your machine.',
+					'By passing the -oj (--output-json) or -ojf (--output-json-full) command-line flags, whisper.cpp generates a structured JSON file containing transcription offset ranges and token-level timing data.',
+				],
+				code: {
+					label: 'run_whisper_cpp.sh',
+					source: `# Transcribe audio using quantized ggml model on Apple Silicon or CPU
+./main \\
+  -m models/ggml-medium.bin \\
+  -f meeting_recording.wav \\
+  -ojf \\
+  -of meeting_transcript
+
+# Converts meeting_transcript.json to broadcast SRT with no network uploads
+`,
+				},
+			},
+			{
+				id: 'offsets-precision-advantage',
+				kicker: 'Integer Timing Precision',
+				heading: 'Why integer millisecond offsets prevent cumulative timestamp drift',
+				paragraphs: [
+					'whisper.cpp JSON output provides timings in two formats: formatted timestamp strings ("00:01:23,450") and integer millisecond counters (offsets.from = 83450). Converting floating-point seconds across hours of audio can introduce subtle rounding drift.',
+					'Our engine prioritizes whisper.cpp integer millisecond offsets for exact arithmetic calculation, splitting long decoder blocks at natural word boundaries while preserving perfect synchronization with video footage.',
+				],
+				bullets: [
+					'Complete offline privacy: Works without an internet connection once loaded in your browser.',
+					'Decoder block rewrapping: Breaks whisper.cpp segments exceeding 80 characters into standard two-line subtitle cues.',
+					'Custom sync offsets: Shift entire transcripts forward or backward with millisecond granularity.',
+				],
+				links: [
+					{
+						href: '/',
+						label: 'Master Whisper JSON converter',
+					},
+					{
+						href: '/premiere-pro-srt-import/',
+						label: 'Premiere Pro import troubleshooting and clean re-export',
+					},
+				],
+			},
+		],
 	},
 	{
 		slug: 'short-video-caption-splitter',
@@ -298,6 +551,50 @@ export const ROUTE_PRESETS: ToolRoutePreset[] = [
 				question: 'What character limit works best for TikTok, Reels, and YouTube Shorts?',
 				answer:
 					'For large center-screen bold subtitles (65 to 85 pt on a 1080px canvas), 14 to 18 characters on 1 line keeps every word inside the central safe margin away from right-side action buttons. For standard two-line lower-third captions on horizontal 16:9 video, switch Max chars to 42 and Max lines to 2.',
+			},
+		],
+		guides: [
+			{
+				id: 'mobile-safe-zone-geometry',
+				kicker: '9:16 Vertical Video Safe Zones',
+				heading: 'Designing single-line captions for TikTok, Instagram Reels, and Shorts',
+				paragraphs: [
+					'Vertical 9:16 mobile videos (1080x1920 pixels) impose strict visual layout restrictions. The bottom 20% of the screen is obscured by user account names, audio tracks, and description text, while the right margin is packed with like, comment, and share icons.',
+					'Traditional horizontal subtitles (42 characters across two lines) inevitably collide with these platform UI elements. Restricting captions to 16 characters on a single line keeps every word inside the central safe zone, maximizing viewer attention and retention.',
+				],
+				code: {
+					label: 'ffmpeg_burn_vertical_captions.sh',
+					source: `# Burn 16-character single-line captions into a 1080x1920 vertical video
+ffmpeg -i vertical_video.mp4 \\
+  -vf "subtitles=captions_16char.srt:force_style='Alignment=2,MarginV=280,FontName=Montserrat,FontSize=28,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2'" \\
+  -c:a copy \\
+  output_with_captions.mp4
+`,
+				},
+			},
+			{
+				id: 'dynamic-reading-pacing',
+				kicker: 'Pacing and Retention',
+				heading: 'Fast caption rhythm and word-level synchronization',
+				paragraphs: [
+					'Fast-paced social media content requires snappy, rhythmic caption delivery. When captions remain static on screen for more than 3 seconds, audience drop-off rates increase. Single-line cues displayed for 0.8 to 2.0 seconds maintain visual momentum.',
+					'This tool leverages Whisper word-level timestamps to group 2 to 4 words per cue. Pauses as brief as 0.35 seconds trigger a clean break, ensuring subtitles appear in synchronization with the speaker vocal emphasis.',
+				],
+				bullets: [
+					'Safe boundary wrapping: Words are never split mid-syllable; individual long words stay on their own single cue.',
+					'Live CPS indicator: Immediately view characters-per-second metrics to avoid visually overwhelming viewers.',
+					'Zero upload latency: Batch re-split hour-long podcasts into short-form clips in milliseconds locally.',
+				],
+				links: [
+					{
+						href: '/capcut-json-to-srt/',
+						label: 'CapCut draft JSON to SRT converter',
+					},
+					{
+						href: '/whisper-verbose-json-to-srt/',
+						label: 'OpenAI Whisper verbose_json preset',
+					},
+				],
 			},
 		],
 	},

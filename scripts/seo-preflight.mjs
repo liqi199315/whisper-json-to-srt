@@ -76,6 +76,42 @@ const ROUTE_DEFINITIONS = [
 		requiredAllSchemas: ['WebApplication', 'FAQPage'],
 	},
 	{
+		route: '/assemblyai-json-to-srt/',
+		file: 'assemblyai-json-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/broadcast-subtitle-qc-standards/',
+		file: 'broadcast-subtitle-qc-standards/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/elevenlabs-scribe-json-to-srt/',
+		file: 'elevenlabs-scribe-json-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/aws-transcribe-json-to-srt/',
+		file: 'aws-transcribe-json-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/davinci-resolve-subtitle-import-error/',
+		file: 'davinci-resolve-subtitle-import-error/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/whisper-hallucination-timestamp-desync/',
+		file: 'whisper-hallucination-timestamp-desync/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
 		route: '/about/',
 		file: 'about/index.html',
 		kind: 'trust',
