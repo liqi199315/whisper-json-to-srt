@@ -16,7 +16,7 @@
 		"cf:deploy": "npm run build && wrangler deploy",
 		"test": "vitest run",
 		"seo:check": "node scripts/seo-preflight.mjs",
-		"release:manifest": "node ../../40_shared/scripts/indie-release-manifest.mjs --project whisperjsontosrt --dist dist --write",
+		"release:manifest": "node scripts/write-release-manifest.mjs",
 		"release:check": "node ../../40_shared/scripts/indie-release-manifest.mjs --project whisperjsontosrt --dist dist --check-live --allow-pending-deploy",
 		"test:e2e": "playwright test",
 		"verify:all": "npm test && npm run build && npm run seo:check && npm run test:e2e",
