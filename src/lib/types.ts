@@ -11,7 +11,9 @@ export type SampleId =
 	| DialectId
 	| 'faster-whisper-json'
 	| 'premiere-source-json'
-	| 'deepgram-utterances';
+	| 'deepgram-utterances'
+	| 'whisper-missing-word-timestamps'
+	| 'whisper-overlapping-cues';
 
 export type OutputFormat = 'srt' | 'vtt' | 'txt' | 'csv';
 

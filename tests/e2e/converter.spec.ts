@@ -497,6 +497,16 @@ test.describe('Whisper JSON to SRT converter journeys', () => {
 				status: /OpenAI Whisper verbose_json/,
 				output: /Welcome/,
 			},
+			{
+				path: '/whisper-json-missing-word-timestamps/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /words array/,
+			},
+			{
+				path: '/whisper-overlapping-out-of-order-cues/',
+				status: /OpenAI Whisper verbose_json/,
+				output: /jumps backward/,
+			},
 		];
 
 		for (const route of routes) {

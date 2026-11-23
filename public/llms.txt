@@ -47,6 +47,8 @@
 - [AWS Transcribe JSON to SRT](https://jsontosrt.com/aws-transcribe-json-to-srt/): Convert Amazon AWS Transcribe JSON items into formatted SubRip subtitles with automated punctuation alignment.
 - [DaVinci Resolve Subtitle Import Fix](https://jsontosrt.com/davinci-resolve-subtitle-import-error/): Resolve DaVinci Resolve subtitle import errors, frame rate timecode drift, and cue overlap rejections.
 - [Whisper Hallucination Timestamp Desync](https://jsontosrt.com/whisper-hallucination-timestamp-desync/): Diagnose and fix Whisper subtitle timestamp desynchronization, silent loops, and corrupted cue intervals.
+- [Whisper JSON Missing Word Timestamps](https://jsontosrt.com/whisper-json-missing-word-timestamps/): See the proportional SRT fallback when a Whisper segment has start and end but no words array.
+- [Whisper Overlapping and Out-of-Order Cues](https://jsontosrt.com/whisper-overlapping-out-of-order-cues/): Export overlapping, backward, and reversed Whisper cues unchanged, with timeline QC warnings beside the SRT.
 
 ## Trust, Privacy & Legal Pages
 

@@ -143,7 +143,9 @@ describe('timeline QC: reversed ranges, overlap, and empty segments', () => {
 	});
 
 	it('reports no false positives across every built-in sample dialect', () => {
+		const intentionalDefects = new Set<string>(['whisper-overlapping-cues']);
 		for (const id of SAMPLE_ORDER) {
+			if (intentionalDefects.has(id)) continue;
 			const result = convertAsrJson(SAMPLE_PAYLOADS[id].json, BASE_OPTIONS);
 			expect(result.ok, `${id} should convert`).toBe(true);
 			if (!result.ok) continue;
@@ -153,6 +155,62 @@ describe('timeline QC: reversed ranges, overlap, and empty segments', () => {
 			).toEqual([]);
 			expect(result.qc.omittedSegments).toBe(0);
 		}
+	});
+
+	it('keeps a wordless Whisper segment proportional and a word-timed pause intact', () => {
+		const result = convertAsrJson(
+			SAMPLE_PAYLOADS['whisper-missing-word-timestamps'].json,
+			BASE_OPTIONS,
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		expect(result.parsed.wordTimingAvailable).toBe(true);
+		expect(result.qc.issues).toEqual([]);
+		expect(result.cues[0]?.endSec).toBeCloseTo(5.914465, 6);
+		expect(result.cues[1]?.startSec).toBe(result.cues[0]?.endSec);
+		expect(result.cues.map((cue) => [Number(cue.startSec.toFixed(3)), Number(cue.endSec.toFixed(3))])).toEqual([
+			[0.2, 5.914],
+			[5.914, 12],
+			[13.1, 15.1],
+			[16.2, 17.2],
+		]);
+		expect(result.output).toContain('00:00:00,200 --> 00:00:05,914');
+		expect(result.output).toContain('00:00:05,914 --> 00:00:12,000');
+		expect(result.output).toContain('00:00:13,100 --> 00:00:15,100');
+		expect(result.output).toContain('00:00:16,200 --> 00:00:17,200');
+	});
+
+	it('reports overlap and reversed-range without moving out-of-order Whisper cues', () => {
+		const result = convertAsrJson(SAMPLE_PAYLOADS['whisper-overlapping-cues'].json, BASE_OPTIONS);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		expect(result.parsed.wordTimingAvailable).toBe(false);
+		expect(result.qc.status).toBe('warning');
+		expect(result.qc.errorCount).toBe(0);
+		expect(result.qc.omittedSegments).toBe(0);
+		expect(result.qc.omittedCues).toBe(0);
+		expect(result.cues.map((cue) => [cue.startSec, cue.endSec])).toEqual([
+			[0.48, 4.86],
+			[3.12, 7.64],
+			[1.05, 2.4],
+			[11.2, 9.05],
+		]);
+		expect(result.output).toContain('00:00:03,120 --> 00:00:07,640');
+		expect(result.output).toContain('00:00:01,050 --> 00:00:02,400');
+		expect(result.output).toContain('00:00:11,200 --> 00:00:09,050');
+		expect(result.qc.issues.map((issue) => `${issue.code}@${issue.scope}:${issue.index}`)).toEqual([
+			'reversed-range@segment:4',
+			'overlap@cue:2',
+			'overlap@cue:3',
+			'reversed-range@cue:4',
+		]);
+		const overlap = result.qc.issues.find((issue) => issue.code === 'overlap' && issue.index === 2);
+		expect(overlap?.value).toBe('1.740');
+		expect(overlap?.relatedIndex).toBe(1);
+		expect(result.output).not.toContain('reversed-range');
+		expect(result.output).not.toContain('Timing was left unchanged');
 	});
 
 	it('keeps a clean fixture at zero issues', () => {

@@ -1120,6 +1120,14 @@ result = model.transcribe(
 						href: '/faster-whisper-srt/',
 						label: 'faster-whisper JSON guide and export',
 					},
+					{
+						href: '/whisper-json-missing-word-timestamps/',
+						label: 'Whisper JSON missing word timestamps',
+					},
+					{
+						href: '/whisper-overlapping-out-of-order-cues/',
+						label: 'Whisper overlapping and out-of-order cues',
+					},
 				],
 			},
 		],
@@ -1143,6 +1151,229 @@ result = model.transcribe(
 				question: 'Does temperature fallback help prevent Whisper hallucinations?',
 				answer:
 					'Yes. Passing a tuple of temperatures like (0.0, 0.2, 0.4, 0.6) allows Whisper to increase randomness when repetition or low average log probabilities are detected, helping it break out of silent loops.',
+			},
+		],
+	},
+	{
+		slug: 'whisper-json-missing-word-timestamps',
+		path: '/whisper-json-missing-word-timestamps/',
+		navLabel: 'Missing Word Times',
+		h1: 'Whisper JSON Missing Word Timestamps',
+		seoTitle: 'Whisper JSON Missing Word Timestamps | Segment-Only SRT Split',
+		metaDescription:
+			'Whisper JSON with segments but no words array splits SRT by character count. See the proportional fallback and what a missing pause cannot recover.',
+		primaryKeyword: 'whisper json missing word timestamps',
+		heroSummary:
+			'A Whisper verbose_json file can contain segments and still have no words array. This page shows the SRT that fallback produces: line breaks spread across the segment start and end, with no way to recover a pause the JSON never stored. A second segment in the same sample has word times, so you can compare both clocks.',
+		defaultSampleId: 'whisper-missing-word-timestamps',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'Segment 1 in the loaded sample has start 0.200 s, end 12.000 s, and text. It has no words array. The parser wraps that text to 42 characters and 2 lines, then spreads the cues across the 11.800 s span by character count.',
+			'Cue 1 contains 77 characters and cue 2 contains 82. The join falls at 5.914 s, written as 00:00:05,914. Cue 2 starts on that same stamp. The 0.6 s pause setting and the 6 s max cue duration do not open a gap here.',
+			'Segment 2 includes word start and end values. The token "cue" ends at 15.100 s and "after" starts at 16.200 s. That 1.100 s gap is above the pause setting, so the export is 00:00:13,100 to 00:00:15,100 and then 00:00:16,200 to 00:00:17,200.',
+			'The status line still says OpenAI Whisper verbose_json. Missing words are not a separate dialect, and timeline QC stays clean on this sample because every stored time is finite, ordered inside its own cue, and non-overlapping.',
+		],
+		guides: [
+			{
+				id: 'missing-words-array',
+				kicker: 'Segment-only JSON',
+				heading: 'Why verbose_json can have segments and still omit word times',
+				paragraphs: [
+					'OpenAI Whisper writes words only when you ask for them. In the local Python package the flag is word_timestamps=True. On the Audio API, verbose_json can return segments without a words array unless timestamp_granularities includes word. faster-whisper leaves segment.words empty unless word_timestamps=True.',
+					'A segment with only start, end, and text is still valid verbose_json. The converter accepts it. The dialect name does not change. What changes is the clock: the SRT times come from the segment edges, not from the spoken pause.',
+				],
+				code: {
+					label: 'save_whisper_word_timestamps.py',
+					source: `import json
+import whisper
+
+model = whisper.load_model("small")
+result = model.transcribe("interview.mp3", word_timestamps=True)
+
+segments = []
+for segment in result["segments"]:
+    words = []
+    for word in segment.get("words") or []:
+        words.append(
+            {
+                "word": word["word"],
+                "start": round(float(word["start"]), 3),
+                "end": round(float(word["end"]), 3),
+            }
+        )
+    segments.append(
+        {
+            "id": segment["id"],
+            "start": round(float(segment["start"]), 3),
+            "end": round(float(segment["end"]), 3),
+            "text": segment["text"],
+            "words": words,
+        }
+    )
+
+with open("whisper-words.json", "w", encoding="utf-8") as handle:
+    json.dump({"segments": segments}, handle, ensure_ascii=False, indent=2)
+`,
+				},
+			},
+			{
+				id: 'proportional-srt-fallback',
+				kicker: 'What this converter does',
+				heading: 'Character-proportional cues versus a real word-timed pause',
+				paragraphs: [
+					'The loaded sample is original. Segment 1 has no words array. Its sentence mentions a two second gap, but that phrase is caption text, not a silence marker. The built SRT cuts the line at 00:00:05,914 because 77 of the 159 wrapped characters have been used, then starts the next cue at the same instant.',
+					'Segment 2 stores word times, so the pause slider applies. The 1.100 s gap between 15.100 s and 16.200 s becomes a real cue break at 00:00:16,200. Moving the pause control changes only that word-timed half. Switching to 16 characters per line rewraps segment 1 too, and the new cuts still share 0.200 s to 12.000 s. Neither control invents the spoken pause.',
+				],
+				bullets: [
+					'Line width moves the segment-only clock. Fewer characters per line create more cues, and each cue still receives a share of 0.200 s to 12.000 s. Those stamps are not acoustic.',
+					'Max cue duration limits word-timed cues. It is not applied while a wordless segment is split by character count.',
+					'This sample is timeline-clean. A wrong but smooth proportional clock is not an overlap, a reversed range, or a repetition loop.',
+				],
+				links: [
+					{
+						href: '/whisper-verbose-json-to-srt/',
+						label: 'OpenAI verbose_json preset',
+					},
+					{
+						href: '/whisper-hallucination-timestamp-desync/',
+						label: 'Whisper hallucination and timestamp jump troubleshooting',
+					},
+					{
+						href: '/whisper-overlapping-out-of-order-cues/',
+						label: 'Whisper overlapping and out-of-order cues',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'Why does my Whisper JSON have segments but no words array?',
+				answer:
+					'Word timestamps are optional. Local whisper and faster-whisper omit words unless word_timestamps=True. The OpenAI transcription API omits the words array unless timestamp_granularities includes word. response_format set to srt never returns word times at all.',
+			},
+			{
+				question: 'Can this converter rebuild the missing pause from the segment text?',
+				answer:
+					'No. It only reads timestamps already stored in the JSON. With no words array it divides the segment start and end by the character count of the wrapped lines. The words "two second gap" in the sample are caption text, not a detected silence.',
+			},
+			{
+				question: 'Will timeline QC flag a segment that has no word timestamps?',
+				answer:
+					'Not by itself. The sample first segment converts with zero QC issues. QC flags non-finite times, reversed ranges, overlaps, empty text, and similar defects. A smooth but wrong proportional clock stays clean.',
+			},
+			{
+				question: 'What should I export if I only have segment times?',
+				answer:
+					'You can still download SRT, VTT, TXT, or CSV. Treat those times as approximate line breaks inside each segment. For a pause-accurate caption, transcribe again with word timestamps and paste that JSON here. Repetition loops and large timestamp jumps are a different failure.',
+			},
+		],
+	},
+	{
+		slug: 'whisper-overlapping-out-of-order-cues',
+		path: '/whisper-overlapping-out-of-order-cues/',
+		navLabel: 'Overlapping Cues',
+		h1: 'Whisper Overlapping and Out-of-Order Cues',
+		seoTitle: 'Whisper Overlapping and Out-of-Order Cues | SRT Timeline QC',
+		metaDescription:
+			'Find Whisper JSON cues that overlap or jump backward, keep those times in the SRT, and read overlap and reversed-range notes before you publish.',
+		primaryKeyword: 'whisper overlapping out of order cues',
+		heroSummary:
+			'Some Whisper JSON files contain finite timestamps that still cannot share one subtitle track. A later segment can start before the previous cue ends, a later segment can jump backward, or a segment can list its end before its start. This page exports that SRT unchanged and shows the timeline QC warnings.',
+		defaultSampleId: 'whisper-overlapping-cues',
+		defaultOptions: {
+			format: 'srt',
+			maxCharsPerLine: 42,
+			maxLinesPerCue: 2,
+			maxCueDurationSec: 6,
+			pauseSplitGapSec: 0.6,
+			offsetMs: 0,
+			includeSpeakerPrefix: false,
+		},
+		schemaNotes: [
+			'The loaded sample has four segments and no words array, so each segment becomes one cue and the segment start and end are copied onto that cue. Nothing is omitted.',
+			'Cue 1 ends at 00:00:04,860 and cue 2 starts at 00:00:03,120. QC reports overlap: cue 2 starts 1.740 s before cue 1 ends. Both ranges stay in the SRT.',
+			'Cue 3 is the third segment, but its range is 00:00:01,050 to 00:00:02,400. QC reports that cue 3 starts 6.590 s before cue 2 ends. The file is not sorted.',
+			'Cue 4 uses start 11.200 s and end 9.050 s. Segment 4 and cue 4 are both reversed-range warnings. The SRT line is 00:00:11,200 --> 00:00:09,050. The two stamps are not swapped.',
+		],
+		guides: [
+			{
+				id: 'overlap-and-order',
+				kicker: 'Source order is kept',
+				heading: 'Overlap, a backward jump, and a reversed range are different defects',
+				paragraphs: [
+					'Overlap means two cues occupy the same stretch of time. In this sample, cue 1 is still open until 4.860 s when cue 2 begins at 3.120 s. A single subtitle track in DaVinci Resolve often flags or drops that overlap, and many broadcast checks reject it. The QC note names both cue numbers and the 1.740 s overlap. It does not trim cue 1 or push cue 2 later.',
+					'Out of order means the segments array is not sorted by start time. Cue 3 begins at 1.050 s even though it is stored after cue 2. A reversed range is stricter: the end stamp is earlier than the start, so the cue has no positive duration. Cue 4 is 11.200 s to 9.050 s. Sorting the array or swapping the stamps would hide the defect, so this converter does neither.',
+				],
+				code: {
+					label: 'overlapping-segments.json',
+					source: `{
+  "segments": [
+    { "id": 0, "start": 0.48, "end": 4.86 },
+    { "id": 1, "start": 3.12, "end": 7.64 },
+    { "id": 2, "start": 1.05, "end": 2.40 },
+    { "id": 3, "start": 11.20, "end": 9.05 }
+  ]
+}
+`,
+				},
+			},
+			{
+				id: 'warnings-still-export',
+				kicker: 'Limits of the repair',
+				heading: 'Warnings are reported, and the SRT is still written',
+				paragraphs: [
+					'These four cues use representable timestamps. The QC status is warning: 0 errors and 4 warnings. Copy and download still produce the SRT, and the export line then says the file was exported with timeline QC warnings. The SRT body does not contain those notes. Download the separate .qc.txt report if you need the issue list next to the subtitle file.',
+					'The CLI prints that report on stderr. --fail-on-qc exits 3 and writes nothing only when QC reports errors, such as a non-finite timestamp. Overlap and reversed-range are warnings, so a pipeline that only sets --fail-on-qc still receives this SRT. Read stderr, or reject warning status in your own script, when one subtitle track must be overlap-free.',
+				],
+				bullets: [
+					'The converter does not shift overlapping cues apart and does not sort segments by start time.',
+					'A reversed segment without words stays reversed in the SRT. A word token whose end is before its start is different: the parser lifts that word end up to the word start before building the cue, and the raw JSON scan still reports reversed-range.',
+					'Repetition loops and large timestamp jumps are a separate page. A missing words array, which smears time by character count instead of overlapping it, is also separate.',
+				],
+				links: [
+					{
+						href: '/whisper-hallucination-timestamp-desync/',
+						label: 'Whisper hallucination and timestamp jump troubleshooting',
+					},
+					{
+						href: '/whisper-json-missing-word-timestamps/',
+						label: 'Whisper JSON missing word timestamps',
+					},
+					{
+						href: '/davinci-resolve-subtitle-import-error/',
+						label: 'DaVinci Resolve subtitle import errors',
+					},
+				],
+			},
+		],
+		faqs: [
+			{
+				question: 'Why do Whisper segments overlap in the JSON?',
+				answer:
+					'A 30 second window that was not trimmed, or two transcript passes concatenated by hand, can place the next segment start inside the previous segment end. This sample uses 3.120 s against an end of 4.860 s. The converter reports the 1.740 s overlap and leaves both cues in source order.',
+			},
+			{
+				question: 'Will the downloaded SRT import cleanly into DaVinci Resolve?',
+				answer:
+					'Not while the overlap and reversed-range warnings remain. Resolve often flags or drops overlapping cues on one subtitle track. This page does not rewrite the times into a non-overlapping track. Re-export helps only when the source JSON itself has ordered, non-overlapping ranges.',
+			},
+			{
+				question: 'Does timeline QC sort out-of-order cues before export?',
+				answer:
+					'No. Cue 3 stays third even though 00:00:01,050 is earlier than cue 2. A player that reads the SRT in file order will show cue 2 and then jump backward. Sort the segments in your own script and convert again if you need chronological order. This tool keeps file order so each QC position matches the JSON position.',
+			},
+			{
+				question: 'Why does --fail-on-qc still write this overlapping file?',
+				answer:
+					'The flag exits 3 and skips the write only when an issue has severity error. The overlap and reversed-range issues on this sample are warnings. Stderr still receives the QC report. A clean conversion keeps stderr empty. This one does not.',
 			},
 		],
 	},
@@ -1247,5 +1478,23 @@ export const LONG_TAIL_WORKFLOW_CARDS: WorkflowLinkCard[] = [
 		presetConfig: '.srt | loop pruning',
 		summary:
 			'Diagnose and fix Whisper subtitle timestamp desynchronization, silent loops, and corrupted cue intervals.',
+	},
+	{
+		slug: 'whisper-json-missing-word-timestamps',
+		path: '/whisper-json-missing-word-timestamps/',
+		badge: 'No word times',
+		anchorText: 'Whisper JSON missing word timestamps',
+		presetConfig: '.srt | segment-only split',
+		summary:
+			'See the proportional SRT fallback when a Whisper segment has start and end but no words array.',
+	},
+	{
+		slug: 'whisper-overlapping-out-of-order-cues',
+		path: '/whisper-overlapping-out-of-order-cues/',
+		badge: 'Cue order',
+		anchorText: 'Whisper overlapping and out-of-order cues',
+		presetConfig: '.srt | overlap warnings',
+		summary:
+			'Export overlapping, backward, and reversed Whisper cues unchanged, with timeline QC warnings beside the SRT.',
 	},
 ];

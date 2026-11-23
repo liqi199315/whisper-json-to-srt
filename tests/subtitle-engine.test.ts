@@ -594,6 +594,8 @@ Comma milliseconds and no byte-order mark let the caption track load.
 			{ id: 'faster-whisper-json', dialect: 'openai-verbose-json' },
 			{ id: 'premiere-source-json', dialect: 'openai-verbose-json' },
 			{ id: 'deepgram-utterances', dialect: 'deepgram-nova' },
+			{ id: 'whisper-missing-word-timestamps', dialect: 'openai-verbose-json' },
+			{ id: 'whisper-overlapping-cues', dialect: 'openai-verbose-json' },
 		];
 		for (const item of cases) {
 			const parsed = parseAsrJson(SAMPLE_PAYLOADS[item.id].json);
