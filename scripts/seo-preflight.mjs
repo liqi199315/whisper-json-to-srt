@@ -112,6 +112,18 @@ const ROUTE_DEFINITIONS = [
 		requiredAllSchemas: ['WebApplication', 'FAQPage'],
 	},
 	{
+		route: '/whisper-json-missing-word-timestamps/',
+		file: 'whisper-json-missing-word-timestamps/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/whisper-overlapping-out-of-order-cues/',
+		file: 'whisper-overlapping-out-of-order-cues/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
 		route: '/about/',
 		file: 'about/index.html',
 		kind: 'trust',

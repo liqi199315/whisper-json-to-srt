@@ -16,8 +16,8 @@ Read these four files in order at the start of every session before you change c
 - **Workspace stage.** Formal production tool site in `30_products/whisper-json-to-srt/`.
 - **Tech stack.** Astro 5 (`output: 'static'`, `trailingSlash: 'always'`, `build.format: 'directory'`), Tailwind CSS v4, TypeScript (`astro/tsconfigs/strict`), Vitest, Playwright, esbuild for CLI bundling, and Cloudflare Workers Static Assets (`wrangler.jsonc`).
 - **Standalone CLI.** Bundled Node ESM CLI in `bin/json-to-srt.mjs` (built via `npm run build:cli`) wrapping `src/lib/subtitle-engine.ts` for headless automated pipelines. It prints the timeline QC report to stderr and supports `--fail-on-qc` (exit `3`, no output written) for strict pipelines.
-- **Twenty content routes.**
-	- **Seventeen converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
+- **Twenty-two content routes.**
+	- **Nineteen converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
 		- `/` (`dist/index.html`)
 		- `/whisper-verbose-json-to-srt/` (`dist/whisper-verbose-json-to-srt/index.html`)
 		- `/whisper-json-to-vtt/` (`dist/whisper-json-to-vtt/index.html`)
@@ -35,6 +35,8 @@ Read these four files in order at the start of every session before you change c
 		- `/aws-transcribe-json-to-srt/` (`dist/aws-transcribe-json-to-srt/index.html`)
 		- `/davinci-resolve-subtitle-import-error/` (`dist/davinci-resolve-subtitle-import-error/index.html`)
 		- `/whisper-hallucination-timestamp-desync/` (`dist/whisper-hallucination-timestamp-desync/index.html`)
+		- `/whisper-json-missing-word-timestamps/` (`dist/whisper-json-missing-word-timestamps/index.html`)
+		- `/whisper-overlapping-out-of-order-cues/` (`dist/whisper-overlapping-out-of-order-cues/index.html`)
 	- **Three E-E-A-T trust routes** (require valid `Organization`, `BreadcrumbList`, or `WebApplication` JSON-LD):
 		- `/about/` (`dist/about/index.html`)
 		- `/privacy/` (`dist/privacy/index.html`)

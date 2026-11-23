@@ -854,6 +854,91 @@ export const SAMPLE_PAYLOADS: Record<
 			2,
 		),
 	},
+	'whisper-missing-word-timestamps': {
+		label: 'Whisper JSON without word timestamps',
+		filename: 'whisper-missing-word-timestamps.json',
+		json: JSON.stringify(
+			{
+				task: 'transcribe',
+				language: 'english',
+				duration: 17.4,
+				text: 'A segment without a words array cannot place the pause, so this long answer is split by character count across the whole span instead of at a real two second gap. Word timestamps open a new cue after the pause.',
+				segments: [
+					{
+						id: 0,
+						seek: 0,
+						start: 0.2,
+						end: 12,
+						text: ' A segment without a words array cannot place the pause, so this long answer is split by character count across the whole span instead of at a real two second gap.',
+					},
+					{
+						id: 1,
+						seek: 1200,
+						start: 13.1,
+						end: 17.2,
+						text: ' Word timestamps open a new cue after the pause.',
+						words: [
+							{ word: 'Word', start: 13.1, end: 13.42 },
+							{ word: 'timestamps', start: 13.46, end: 14.05 },
+							{ word: 'open', start: 14.1, end: 14.38 },
+							{ word: 'a', start: 14.42, end: 14.5 },
+							{ word: 'new', start: 14.54, end: 14.78 },
+							{ word: 'cue', start: 14.82, end: 15.1 },
+							{ word: 'after', start: 16.2, end: 16.48 },
+							{ word: 'the', start: 16.52, end: 16.66 },
+							{ word: 'pause.', start: 16.7, end: 17.2 },
+						],
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
+	'whisper-overlapping-cues': {
+		label: 'Whisper overlapping and out-of-order cues',
+		filename: 'whisper-overlapping-out-of-order.json',
+		json: JSON.stringify(
+			{
+				task: 'transcribe',
+				language: 'english',
+				duration: 12.5,
+				text: 'The first cue is still running when the next cue begins. The second cue starts before the first cue ends. This later segment jumps backward on the clock. This segment lists the end time before the start.',
+				segments: [
+					{
+						id: 0,
+						seek: 0,
+						start: 0.48,
+						end: 4.86,
+						text: ' The first cue is still running when the next cue begins.',
+					},
+					{
+						id: 1,
+						seek: 312,
+						start: 3.12,
+						end: 7.64,
+						text: ' The second cue starts before the first cue ends.',
+					},
+					{
+						id: 2,
+						seek: 105,
+						start: 1.05,
+						end: 2.4,
+						text: ' This later segment jumps backward on the clock.',
+					},
+					{
+						id: 3,
+						seek: 1120,
+						start: 11.2,
+						end: 9.05,
+						text: ' This segment lists the end time before the start.',
+					},
+				],
+			},
+			null,
+			2,
+		),
+	},
 };
 
 export const SAMPLE_ORDER: SampleId[] = [
@@ -867,4 +952,6 @@ export const SAMPLE_ORDER: SampleId[] = [
 	'deepgram-utterances',
 	'assemblyai-utterances',
 	'capcut-draft',
+	'whisper-missing-word-timestamps',
+	'whisper-overlapping-cues',
 ];

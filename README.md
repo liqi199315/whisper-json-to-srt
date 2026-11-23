@@ -63,7 +63,7 @@ cat transcript.json | ./bin/json-to-srt.mjs -f srt > output.srt
 
 Timeline QC runs in both the browser and CLI. It reports non-finite or unrepresentable times, reversed ranges, overlaps, and empty segments with stable codes such as `invalid-time`, `reversed-range`, `overlap`, and `empty-segment`. Invalid segments are omitted and counted; overlap and reversed ranges are reported without moving cue timing. The CLI writes the QC report to stderr and keeps the subtitle output on stdout or in the requested file.
 
-## Built routes (14 content pages)
+## Built routes (22 content pages)
 
 | Route | Built file | Kind | Primary intent |
 |---|---|---|---|
@@ -78,6 +78,14 @@ Timeline QC runs in both the browser and CLI. It reports non-finite or unreprese
 | `/capcut-json-to-srt/` | `dist/capcut-json-to-srt/index.html` | Tool | Plain CapCut `draft_content.json` to SRT. Encrypted 6.0+ drafts are refused |
 | `/gpt-4o-transcribe-diarize-srt/` | `dist/gpt-4o-transcribe-diarize-srt/index.html` | Tool | OpenAI `diarized_json` speaker segments to SRT |
 | `/deepgram-json-to-srt/` | `dist/deepgram-json-to-srt/index.html` | Tool | Deepgram utterances JSON to speaker-labeled SRT |
+| `/assemblyai-json-to-srt/` | `dist/assemblyai-json-to-srt/index.html` | Tool | AssemblyAI utterance JSON to speaker-labeled SRT |
+| `/broadcast-subtitle-qc-standards/` | `dist/broadcast-subtitle-qc-standards/index.html` | Tool | Broadcast CPL, CPS, and timeline QC reference |
+| `/elevenlabs-scribe-json-to-srt/` | `dist/elevenlabs-scribe-json-to-srt/index.html` | Tool | ElevenLabs Scribe word JSON to SRT |
+| `/aws-transcribe-json-to-srt/` | `dist/aws-transcribe-json-to-srt/index.html` | Tool | AWS Transcribe items JSON to SRT |
+| `/davinci-resolve-subtitle-import-error/` | `dist/davinci-resolve-subtitle-import-error/index.html` | Tool | DaVinci Resolve SRT import troubleshooting |
+| `/whisper-hallucination-timestamp-desync/` | `dist/whisper-hallucination-timestamp-desync/index.html` | Tool | Whisper hallucination loops and timestamp jumps |
+| `/whisper-json-missing-word-timestamps/` | `dist/whisper-json-missing-word-timestamps/index.html` | Tool | Segment-only Whisper JSON proportional SRT fallback |
+| `/whisper-overlapping-out-of-order-cues/` | `dist/whisper-overlapping-out-of-order-cues/index.html` | Tool | Overlapping, out-of-order, and reversed Whisper cues |
 | `/about/` | `dist/about/index.html` | Trust | Browser-local architecture, SRT/WebVTT spec testing, ASR schemas, non-affiliation, `hello@jsontosrt.com` |
 | `/privacy/` | `dist/privacy/index.html` | Trust | Zero-upload RAM guarantee, anonymized GA4 events, cookie opt-out, GDPR/CCPA summary |
 | `/terms/` | `dist/terms/index.html` | Trust | MIT open tool terms, broadcast sync QC responsibility, `rel="sponsored"` disclosure policy |
@@ -102,8 +110,8 @@ npm run cf:preview
 - `npm run dev` starts the local Astro server at `http://127.0.0.1:4325`.
 - `npm test` runs the Vitest unit test suites (`tests/subtitle-engine.test.ts` and `tests/cli.test.ts`).
 - `npm run build` builds the Node CLI bundle and compiles the static site into `dist/`.
-- `npm run seo:check` runs `scripts/seo-preflight.mjs` against `dist/` to verify all required output files, raster social cards, dual IndexNow files, unique `<title>` and `<meta name="description">` across 14 routes, exact `<link rel="canonical">` (`https://jsontosrt.com/...`), `<meta property="og:image">`, single `<h1>`, `WebApplication` + `FAQPage` JSON-LD on the 11 tool routes, valid `Organization` / `BreadcrumbList` / `WebApplication` JSON-LD on the 3 trust routes, unbroken internal links, and zero placeholders or long dashes.
-- `npm run test:e2e` starts `npm run preview` on `http://127.0.0.1:4325/` and runs the Chromium specs in `tests/e2e/converter.spec.ts` (converter journeys, the five long-tail pages, GA4 `window.dataLayer` + zero external network requests, and `375x812` mobile viewport + footer trust navigation).
+- `npm run seo:check` runs `scripts/seo-preflight.mjs` against `dist/` to verify all required output files, raster social cards, dual IndexNow files, unique `<title>` and `<meta name="description">` across 22 routes, exact `<link rel="canonical">` (`https://jsontosrt.com/...`), `<meta property="og:image">`, single `<h1>`, `WebApplication` + `FAQPage` JSON-LD on the 19 tool routes, valid `Organization` / `BreadcrumbList` / `WebApplication` JSON-LD on the 3 trust routes, unbroken internal links, and zero placeholders or long dashes.
+- `npm run test:e2e` starts `npm run preview` on `http://127.0.0.1:4325/` and runs the Chromium specs in `tests/e2e/converter.spec.ts` (converter journeys, the long-tail tool pages, GA4 `window.dataLayer` + zero external network requests, and `375x812` mobile viewport + footer trust navigation).
 - `npm run verify:all` runs unit tests, static build, SEO preflight, and Playwright E2E in sequence.
 
 ## Production launch runbook
