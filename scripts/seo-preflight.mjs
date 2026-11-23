@@ -124,6 +124,36 @@ const ROUTE_DEFINITIONS = [
 		requiredAllSchemas: ['WebApplication', 'FAQPage'],
 	},
 	{
+		route: '/merge-subtitles/',
+		file: 'merge-subtitles/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/fix-subtitle-encoding/',
+		file: 'fix-subtitle-encoding/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/srt-to-json/',
+		file: 'srt-to-json/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/ttml-to-srt/',
+		file: 'ttml-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
+		route: '/smi-to-srt/',
+		file: 'smi-to-srt/index.html',
+		kind: 'tool',
+		requiredAllSchemas: ['WebApplication', 'FAQPage'],
+	},
+	{
 		route: '/about/',
 		file: 'about/index.html',
 		kind: 'trust',

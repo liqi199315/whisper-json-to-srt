@@ -1,0 +1,848 @@
+---
+import {
+	analyzeSubtitleEncoding,
+	buildEncodingSampleBytes,
+	decodeSubtitleBytes,
+	exportFixedSubtitleText,
+	SUPPORTED_ENCODINGS,
+	type SubtitleEncodingId,
+} from '../lib/subtitle-encoding';
+import type { TimelineQcReport } from '../lib/timeline-qc';
+
+function formatByteSize(bytes: number): string {
+	if (bytes >= 1_000_000) {
+		return `${(bytes / 1_000_000).toFixed(2)} MB`;
+	}
+	if (bytes >= 1_000) {
+		return `${(bytes / 1_000).toFixed(1)} KB`;
+	}
+	return `${bytes} B`;
+}
+
+const SAMPLE_BUTTONS = [
+	{
+		key: 'gbk-zh',
+		testid: 'encoding-sample-gbk',
+		label: 'GBK Chinese',
+		detail: 'Simplified Chinese with a 0.2 s overlap',
+	},
+	{
+		key: 'cp1251-ru',
+		testid: 'encoding-sample-cp1251',
+		label: 'CP1251 Russian',
+		detail: 'Cyrillic text, clean cue timing',
+	},
+	{
+		key: 'shift-jis-ja',
+		testid: 'encoding-sample-sjis',
+		label: 'Shift-JIS Japanese',
+		detail: 'Hiragana and katakana cues',
+	},
+	{
+		key: 'cp1252-fr',
+		testid: 'encoding-sample-cp1252',
+		label: 'CP1252 French',
+		detail: 'Western European accents',
+	},
+] as const;
+
+const QC_TONE_CLASS: Record<TimelineQcReport['status'], string> = {
+	clean: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+	warning: 'bg-amber-50/70 border-amber-300 text-amber-950',
+	error: 'bg-rose-50/70 border-rose-300 text-rose-950',
+};
+
+const QC_ISSUE_LIMIT = 8;
+
+const initialSample = buildEncodingSampleBytes('gbk-zh');
+const initialAnalysis = analyzeSubtitleEncoding(initialSample.bytes);
+const initialEncoding: SubtitleEncodingId = initialAnalysis.recommendedEncoding;
+const initialDecoded = decodeSubtitleBytes(initialSample.bytes, initialEncoding);
+const initialExport = exportFixedSubtitleText(initialDecoded.text, { bom: false, lineEnding: 'lf' });
+const initialCandidates = initialAnalysis.candidates.slice(0, 4);
+const initialPreviewCues = initialDecoded.previewCues.slice(0, 10);
+const initialQc = initialDecoded.qc;
+const initialQcIssues = initialQc.issues.slice(0, QC_ISSUE_LIMIT);
+const initialBomNote = initialAnalysis.bomEncoding
+	? `Byte order mark detected: ${initialAnalysis.bomEncoding}.`
+	: 'No byte order mark detected.';
+const initialSampleLabel = initialSample.description.replace(/\.$/, '');
+---
+
+<section
+	aria-label="Subtitle encoding repair workbench"
+	class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+	data-encoding-workbench
+	data-initial-encoding={initialEncoding}
+>
+	<div class="border-b border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+		<div class="flex flex-wrap items-start justify-between gap-3 min-w-0">
+			<div class="space-y-1 min-w-0">
+				<h2 class="text-sm sm:text-base font-bold text-slate-900">
+					Subtitle Encoding Repair Workbench
+				</h2>
+				<p class="text-xs text-slate-600 leading-relaxed">
+					Reads the raw ArrayBuffer, scores 11 encodings with the native TextDecoder, and writes UTF-8 with optional BOM and CRLF line endings.
+				</p>
+			</div>
+			<span class="inline-flex flex-wrap items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800 border border-emerald-200">
+				<span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>
+				<span>Zero upload / local RAM</span>
+			</span>
+		</div>
+
+		<div
+			data-dropzone
+			class="rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-5 text-center space-y-2 min-w-0"
+		>
+			<input
+				id="encoding-file-upload"
+				data-testid="encoding-file-upload"
+				type="file"
+				accept=".srt,.vtt,.ass,.ssa,.smi,.txt"
+				class="sr-only"
+			/>
+			<label for="encoding-file-upload" class="block cursor-pointer space-y-1">
+				<span class="block text-sm font-semibold text-slate-900 break-words">
+					Drop a subtitle file here or click to browse
+				</span>
+				<span class="block text-xs text-slate-600 break-words">
+					SRT, WebVTT, ASS, SSA, SMI, or TXT. No file size cap, no server round trip.
+				</span>
+			</label>
+			<p data-dropzone-badge class="text-[11px] font-mono text-slate-500 break-words">
+				Sample bytes loaded: {formatByteSize(initialSample.bytes.byteLength)}
+			</p>
+		</div>
+
+		<div class="space-y-2">
+			<p class="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+				Raw byte samples
+			</p>
+			<div class="flex flex-wrap gap-2">
+				{
+					SAMPLE_BUTTONS.map((sample) => (
+						<button
+							type="button"
+							data-mode-pill
+							data-encoding-sample={sample.key}
+							data-testid={sample.testid}
+							aria-pressed={sample.key === 'gbk-zh' ? 'true' : 'false'}
+							class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-left cursor-pointer"
+						>
+							<span class="block text-xs font-semibold">{sample.label}</span>
+							<span class="block text-[10px] opacity-75">{sample.detail}</span>
+						</button>
+					))
+				}
+			</div>
+			<p data-load-status role="status" aria-live="polite" class="text-xs text-slate-600 break-words">
+				{initialSampleLabel}, {formatByteSize(initialSample.bytes.byteLength)} of raw bytes, 11
+				encodings scored from the ArrayBuffer. {initialBomNote} Recommended decoding: {initialEncoding}.
+			</p>
+		</div>
+	</div>
+
+	<div class="border-b border-slate-200 px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h3 class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Encoding candidates by score
+			</h3>
+			<span class="text-[11px] text-slate-500">Top 4 of 11, ranked from the raw bytes</span>
+		</div>
+
+		<div
+			data-testid="encoding-candidates"
+			class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5"
+		>
+			{
+				initialCandidates.map((candidate) => (
+					<button
+						type="button"
+						data-mode-pill
+						data-candidate={candidate.encoding}
+						aria-pressed={candidate.encoding === initialEncoding ? 'true' : 'false'}
+						class="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-left flex flex-col gap-1 min-w-0 cursor-pointer"
+					>
+						<span class="flex items-center justify-between gap-2 min-w-0">
+							<span class="text-xs font-semibold break-words">{candidate.label}</span>
+							<span class="font-mono text-[11px] tabular-nums">{candidate.score.toFixed(1)}</span>
+						</span>
+						<span class="block text-[11px] font-mono tabular-nums opacity-80">
+							{candidate.replacementCount} U+FFFD ({(candidate.replacementRatio * 100).toFixed(1)}%)
+						</span>
+						<span class="block text-[10px] opacity-75 break-words">
+							{candidate.isRecommended ? `${candidate.region} / recommended` : candidate.region}
+						</span>
+					</button>
+				))
+			}
+		</div>
+
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+			<label for="encoding-select" class="space-y-1 min-w-0">
+				<span class="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+					Source encoding
+				</span>
+				<select
+					id="encoding-select"
+					data-testid="encoding-select"
+					class="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
+				>
+					{
+						SUPPORTED_ENCODINGS.map((option) => (
+							<option value={option.id} selected={option.id === initialEncoding}>
+								{option.label} / {option.region}
+							</option>
+						))
+					}
+				</select>
+			</label>
+
+			<label for="encoding-bom-select" class="space-y-1 min-w-0">
+				<span class="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+					Byte order mark
+				</span>
+				<select
+					id="encoding-bom-select"
+					data-testid="encoding-bom-select"
+					class="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
+				>
+					<option value="none" selected>UTF-8 (no BOM)</option>
+					<option value="bom">UTF-8 with BOM</option>
+				</select>
+			</label>
+
+			<label for="encoding-eol-select" class="space-y-1 min-w-0">
+				<span class="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+					Line endings
+				</span>
+				<select
+					id="encoding-eol-select"
+					data-testid="encoding-eol-select"
+					class="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-sky-500 focus:outline-none"
+				>
+					<option value="lf" selected>LF (Unix / macOS / Web)</option>
+					<option value="crlf">CRLF (Windows / Premiere)</option>
+				</select>
+			</label>
+		</div>
+
+		<p class="text-[11px] text-slate-500 break-words">
+			Active decoding loss:
+			<span data-active-replacements class="font-mono tabular-nums">
+				{initialDecoded.replacementCount} U+FFFD ({(initialDecoded.replacementRatio * 100).toFixed(1)}%) for {initialEncoding}
+			</span>
+		</p>
+	</div>
+
+	<div class="border-b border-slate-200 px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h3 class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Mojibake before vs repaired after
+			</h3>
+			<span data-preview-caption class="text-[11px] text-slate-500 tabular-nums">
+				Showing {initialPreviewCues.length} cue pairs, first 10 decoded cues
+			</span>
+		</div>
+
+		<div class="overflow-x-auto rounded-xl border border-slate-200">
+			<table
+				data-testid="encoding-preview-table"
+				class="w-full min-w-[40rem] text-left border-collapse text-xs"
+			>
+				<thead>
+					<tr
+						class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[11px]"
+					>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-16 whitespace-nowrap">Cue #</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold w-44">Timestamp</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Before (Broken UTF-8 View)</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">After (Repaired Text)</th>
+					</tr>
+				</thead>
+				<tbody data-preview-body class="divide-y divide-slate-100 bg-white">
+					{
+						initialPreviewCues.length === 0 ? (
+							<tr>
+								<td colspan="4" class="px-3 py-4 text-xs text-slate-500">
+									No SRT or VTT cue timing was parsed from the sample bytes.
+								</td>
+							</tr>
+						) : (
+							initialPreviewCues.map((cue) => (
+								<tr>
+									<td class="py-2 px-3 font-mono tabular-nums text-slate-500 align-top">
+										{cue.index}
+									</td>
+									<td class="py-2 px-3 font-mono text-[11px] text-slate-600 align-top break-words">
+										{cue.timestamp}
+									</td>
+									<td class="py-2 px-3 text-slate-500 align-top">
+										<span class="block whitespace-pre-wrap break-words">{cue.mojibakeText}</span>
+									</td>
+									<td class="py-2 px-3 text-slate-900 align-top">
+										<span class="block whitespace-pre-wrap break-words">{cue.decodedText}</span>
+									</td>
+								</tr>
+							))
+						)
+					}
+				</tbody>
+			</table>
+		</div>
+
+		<p class="text-[11px] text-slate-500 break-words">
+			The broken view decodes the same bytes as UTF-8 without repair, and the repaired column uses the selected source encoding. On a narrow screen, scroll the table sideways to reach the repaired column.
+		</p>
+	</div>
+
+	<div class="border-b border-slate-200 px-4 sm:px-6 py-4 sm:py-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+		<div
+			data-testid="encoding-qc-summary"
+			data-qc-state={initialQc.status}
+			data-qc-errors={initialQc.errorCount}
+			data-qc-warnings={initialQc.warningCount}
+			class={`rounded-xl border p-3.5 space-y-2 min-w-0 ${QC_TONE_CLASS[initialQc.status]}`}
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<h3 class="text-xs font-semibold uppercase tracking-wider">Timeline QC after repair</h3>
+				<button
+					type="button"
+					data-testid="encoding-qc-download-btn"
+					class="min-h-11 sm:min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+				>
+					Download .qc.txt
+				</button>
+			</div>
+			<p data-qc-summary-text class="text-xs leading-relaxed break-words">{initialQc.summary}</p>
+			<p class="text-[11px] font-mono tabular-nums break-words">
+				Errors: {initialQc.errorCount}, warnings: {initialQc.warningCount}, cues reviewed: {initialQc.emittedCues}
+			</p>
+			{initialQcIssues.length === 0 ? (
+				<ul data-testid="encoding-qc-issues" class="list-disc pl-4 space-y-1 text-[11px] leading-relaxed break-words">
+					<li data-qc-code="clean" class="list-none pl-0">No timeline QC issues detected after decoding.</li>
+				</ul>
+			) : (
+				<ul data-testid="encoding-qc-issues" class="list-disc pl-4 space-y-1 text-[11px] leading-relaxed break-words">
+					{initialQcIssues.map((issue) => (
+						<li data-qc-code={issue.code} data-qc-scope={issue.scope} data-qc-index={issue.index}>
+							[{issue.code}] {issue.message}
+						</li>
+					))}
+				</ul>
+			)}
+			<p data-qc-more class="text-[11px] leading-relaxed break-words opacity-80">
+				{
+					initialQc.issues.length > QC_ISSUE_LIMIT
+						? `Showing ${QC_ISSUE_LIMIT} of ${initialQc.issues.length} issues. Download the .qc.txt report for the full list.`
+						: 'Encoding repair never rewrites cue timing. Overlaps, reversed ranges, and zero-duration cues are reported for a manual fix.'
+				}
+			</p>
+		</div>
+
+		<div class="space-y-2 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+				<label for="encoding-output" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Repaired UTF-8 output
+				</label>
+				<span data-output-meta class="text-[11px] font-mono text-slate-500 break-words">
+					{formatByteSize(initialExport.byteLength)} / UTF-8 without BOM / LF
+				</span>
+			</div>
+
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					data-testid="encoding-copy-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Copy UTF-8 text
+				</button>
+				<button
+					type="button"
+					data-testid="encoding-download-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Download UTF-8
+				</button>
+			</div>
+
+			<p
+				data-testid="encoding-export-status"
+				role="status"
+				aria-live="polite"
+				class="hidden rounded-lg px-3 py-2 text-xs font-medium"
+			></p>
+
+			<textarea
+				id="encoding-output"
+				data-testid="encoding-output"
+				rows="14"
+				readonly
+				spellcheck="false"
+				autocomplete="off"
+				class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{initialExport.text}</textarea>
+		</div>
+	</div>
+
+	<div class="px-4 sm:px-6 py-3 bg-slate-50/60 text-[11px] text-slate-500 leading-relaxed break-words">
+		Copy and download record one anonymized subtitle_export event with the action and format only. Filenames, subtitle text, and file contents never leave the browser.
+	</div>
+</section>
+
+<script>
+	import { trackToolEvent } from '../lib/analytics';
+	import {
+		analyzeSubtitleEncoding,
+		buildEncodingSampleBytes,
+		decodeSubtitleBytes,
+		exportFixedSubtitleText,
+		type EncodingAnalysisResult,
+		type ExportEncodingResult,
+		type PreviewCuePair,
+		type SubtitleEncodingId,
+	} from '../lib/subtitle-encoding';
+	import { formatQcReport, type QcIssue, type TimelineQcReport } from '../lib/timeline-qc';
+
+	const QC_TONE_CLASS: Record<TimelineQcReport['status'], string> = {
+		clean: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+		warning: 'bg-amber-50/70 border-amber-300 text-amber-950',
+		error: 'bg-rose-50/70 border-rose-300 text-rose-950',
+	};
+
+	const QC_ISSUE_LIMIT = 8;
+	const PREVIEW_LIMIT = 10;
+
+	function formatByteSize(bytes: number): string {
+		if (bytes >= 1_000_000) {
+			return `${(bytes / 1_000_000).toFixed(2)} MB`;
+		}
+		if (bytes >= 1_000) {
+			return `${(bytes / 1_000).toFixed(1)} KB`;
+		}
+		return `${bytes} B`;
+	}
+
+	function bindWorkbench(root: HTMLElement): void {
+		const fileInput = root.querySelector<HTMLInputElement>('[data-testid="encoding-file-upload"]');
+		const dropzone = root.querySelector<HTMLElement>('[data-dropzone]');
+		const dropzoneBadge = root.querySelector<HTMLElement>('[data-dropzone-badge]');
+		const sampleButtons = Array.from(
+			root.querySelectorAll<HTMLButtonElement>('[data-encoding-sample]'),
+		);
+		const candidateBox = root.querySelector<HTMLElement>('[data-testid="encoding-candidates"]');
+		const select = root.querySelector<HTMLSelectElement>('[data-testid="encoding-select"]');
+		const bomSelect = root.querySelector<HTMLSelectElement>('[data-testid="encoding-bom-select"]');
+		const eolSelect = root.querySelector<HTMLSelectElement>('[data-testid="encoding-eol-select"]');
+		const previewBody = root.querySelector<HTMLElement>('[data-preview-body]');
+		const previewCaption = root.querySelector<HTMLElement>('[data-preview-caption]');
+		const qcBox = root.querySelector<HTMLElement>('[data-testid="encoding-qc-summary"]');
+		const qcSummaryText = root.querySelector<HTMLElement>('[data-qc-summary-text]');
+		const qcIssues = root.querySelector<HTMLElement>('[data-testid="encoding-qc-issues"]');
+		const qcMore = root.querySelector<HTMLElement>('[data-qc-more]');
+		const qcDownloadBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="encoding-qc-download-btn"]',
+		);
+		const output = root.querySelector<HTMLTextAreaElement>('[data-testid="encoding-output"]');
+		const outputMeta = root.querySelector<HTMLElement>('[data-output-meta]');
+		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="encoding-copy-btn"]');
+		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="encoding-download-btn"]');
+		const exportStatus = root.querySelector<HTMLElement>('[data-testid="encoding-export-status"]');
+		const loadStatus = root.querySelector<HTMLElement>('[data-load-status]');
+		const activeReplacement = root.querySelector<HTMLElement>('[data-active-replacements]');
+
+		if (
+			!fileInput ||
+			!dropzone ||
+			!candidateBox ||
+			!select ||
+			!bomSelect ||
+			!eolSelect ||
+			!previewBody ||
+			!qcBox ||
+			!qcSummaryText ||
+			!qcIssues ||
+			!output ||
+			!copyBtn ||
+			!downloadBtn ||
+			!exportStatus
+		) {
+			return;
+		}
+
+		let activeBytes: Uint8Array | null = null;
+		let activeEncoding = (select.value as SubtitleEncodingId) || 'utf-8';
+		let activeExport: ExportEncodingResult | null = null;
+		let activeQc: TimelineQcReport | null = null;
+
+		const setExportStatus = (message: string, risk: boolean): void => {
+			exportStatus.textContent = message;
+			exportStatus.className = risk
+				? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950'
+				: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950';
+		};
+
+		const clearExportStatus = (): void => {
+			exportStatus.textContent = '';
+			exportStatus.className = 'hidden rounded-lg px-3 py-2 text-xs font-medium';
+		};
+
+		const updateCandidatePressed = (): void => {
+			for (const button of Array.from(
+				candidateBox.querySelectorAll<HTMLButtonElement>('[data-candidate]'),
+			)) {
+				button.setAttribute(
+					'aria-pressed',
+					button.dataset.candidate === activeEncoding ? 'true' : 'false',
+				);
+			}
+		};
+
+		const renderCandidates = (analysis: EncodingAnalysisResult): void => {
+			const fragment = document.createDocumentFragment();
+			for (const candidate of analysis.candidates.slice(0, 4)) {
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.setAttribute('data-mode-pill', '');
+				button.dataset.candidate = candidate.encoding;
+				button.className =
+					'rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-left flex flex-col gap-1 min-w-0 cursor-pointer';
+				button.setAttribute(
+					'aria-pressed',
+					candidate.encoding === activeEncoding ? 'true' : 'false',
+				);
+				button.setAttribute(
+					'aria-label',
+					`Use ${candidate.label}: score ${candidate.score.toFixed(1)}, ${candidate.replacementCount} replacement characters`,
+				);
+
+				const top = document.createElement('span');
+				top.className = 'flex items-center justify-between gap-2 min-w-0';
+				const name = document.createElement('span');
+				name.className = 'text-xs font-semibold break-words';
+				name.textContent = candidate.label;
+				const score = document.createElement('span');
+				score.className = 'font-mono text-[11px] tabular-nums';
+				score.textContent = candidate.score.toFixed(1);
+				top.append(name, score);
+
+				const stats = document.createElement('span');
+				stats.className = 'block text-[11px] font-mono tabular-nums opacity-80';
+				stats.textContent = `${candidate.replacementCount} U+FFFD (${(candidate.replacementRatio * 100).toFixed(1)}%)`;
+
+				const region = document.createElement('span');
+				region.className = 'block text-[10px] opacity-75 break-words';
+				region.textContent = candidate.isRecommended
+					? `${candidate.region} / recommended`
+					: candidate.region;
+
+				button.append(top, stats, region);
+				button.addEventListener('click', () => {
+					select.value = candidate.encoding;
+					applyEncoding(candidate.encoding);
+				});
+				fragment.appendChild(button);
+			}
+			candidateBox.replaceChildren(fragment);
+		};
+
+		const renderPreview = (pairs: PreviewCuePair[]): void => {
+			const rows = pairs.slice(0, PREVIEW_LIMIT);
+			const fragment = document.createDocumentFragment();
+			if (rows.length === 0) {
+				const tr = document.createElement('tr');
+				const td = document.createElement('td');
+				td.colSpan = 4;
+				td.className = 'px-3 py-4 text-xs text-slate-500';
+				td.textContent =
+					'No SRT or VTT cue timing was parsed from the decoded bytes. Inspect the UTF-8 output below.';
+				tr.appendChild(td);
+				fragment.appendChild(tr);
+			} else {
+				for (const cue of rows) {
+					const tr = document.createElement('tr');
+
+					const indexCell = document.createElement('td');
+					indexCell.className = 'py-2 px-3 font-mono tabular-nums text-slate-500 align-top';
+					indexCell.textContent = String(cue.index);
+
+					const timeCell = document.createElement('td');
+					timeCell.className =
+						'py-2 px-3 font-mono text-[11px] text-slate-600 align-top break-words';
+					timeCell.textContent = cue.timestamp;
+
+					const beforeCell = document.createElement('td');
+					beforeCell.className = 'py-2 px-3 text-slate-500 align-top';
+					const beforeText = document.createElement('span');
+					beforeText.className = 'block whitespace-pre-wrap break-words';
+					beforeText.textContent = cue.mojibakeText;
+					beforeCell.appendChild(beforeText);
+
+					const afterCell = document.createElement('td');
+					afterCell.className = 'py-2 px-3 text-slate-900 align-top';
+					const afterText = document.createElement('span');
+					afterText.className = 'block whitespace-pre-wrap break-words';
+					afterText.textContent = cue.decodedText;
+					afterCell.appendChild(afterText);
+
+					tr.append(indexCell, timeCell, beforeCell, afterCell);
+					fragment.appendChild(tr);
+				}
+			}
+			previewBody.replaceChildren(fragment);
+			if (previewCaption) {
+				previewCaption.textContent = `Showing ${rows.length} cue pairs, first ${PREVIEW_LIMIT} decoded cues`;
+			}
+		};
+
+		const renderQc = (report: TimelineQcReport): void => {
+			activeQc = report;
+			qcBox.dataset.qcState = report.status;
+			qcBox.dataset.qcErrors = String(report.errorCount);
+			qcBox.dataset.qcWarnings = String(report.warningCount);
+			qcBox.className = `rounded-xl border p-3.5 space-y-2 min-w-0 ${QC_TONE_CLASS[report.status]}`;
+			qcSummaryText.textContent = report.summary;
+
+			const fragment = document.createDocumentFragment();
+			const issues: QcIssue[] = report.issues.slice(0, QC_ISSUE_LIMIT);
+			if (issues.length === 0) {
+				const item = document.createElement('li');
+				item.dataset.qcCode = 'clean';
+				item.className = 'list-none pl-0';
+				item.textContent = 'No timeline QC issues detected after decoding.';
+				fragment.appendChild(item);
+			} else {
+				for (const issue of issues) {
+					const item = document.createElement('li');
+					item.dataset.qcCode = issue.code;
+					item.dataset.qcScope = issue.scope;
+					item.dataset.qcIndex = String(issue.index);
+					item.textContent = `[${issue.code}] ${issue.message}`;
+					fragment.appendChild(item);
+				}
+			}
+			qcIssues.replaceChildren(fragment);
+
+			if (qcMore) {
+				qcMore.textContent =
+					report.issues.length > QC_ISSUE_LIMIT
+						? `Showing ${QC_ISSUE_LIMIT} of ${report.issues.length} issues. Download the .qc.txt report for the full list.`
+						: 'Encoding repair never rewrites cue timing. Overlaps, reversed ranges, and zero-duration cues are reported for a manual fix.';
+			}
+			if (qcDownloadBtn) {
+				qcDownloadBtn.disabled = false;
+			}
+		};
+
+		const applyEncoding = (encoding: SubtitleEncodingId): void => {
+			if (!activeBytes) return;
+			activeEncoding = encoding;
+			select.value = encoding;
+
+			const decoded = decodeSubtitleBytes(activeBytes, encoding);
+			const exported = exportFixedSubtitleText(decoded.text, {
+				bom: bomSelect.value === 'bom',
+				lineEnding: eolSelect.value === 'crlf' ? 'crlf' : 'lf',
+			});
+
+			activeExport = exported;
+			output.value = exported.text;
+			renderPreview(decoded.previewCues);
+			renderQc(decoded.qc);
+			updateCandidatePressed();
+
+			if (outputMeta) {
+				outputMeta.textContent = `${formatByteSize(exported.byteLength)} / ${
+					exported.bom ? 'UTF-8 with BOM' : 'UTF-8 without BOM'
+				} / ${exported.lineEnding === 'crlf' ? 'CRLF' : 'LF'}`;
+			}
+			if (activeReplacement) {
+				activeReplacement.textContent = `${decoded.replacementCount} U+FFFD (${(
+					decoded.replacementRatio * 100
+				).toFixed(1)}%) for ${encoding}`;
+			}
+			clearExportStatus();
+		};
+
+		const loadBytes = (bytes: Uint8Array, sourceLabel: string, sampleKey: string | null): void => {
+			activeBytes = bytes;
+			const analysis = analyzeSubtitleEncoding(bytes);
+
+			for (const button of sampleButtons) {
+				const isActive = sampleKey !== null && button.dataset.encodingSample === sampleKey;
+				button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+			}
+
+			if (loadStatus) {
+				const bomNote = analysis.bomEncoding
+					? `Byte order mark detected: ${analysis.bomEncoding}.`
+					: 'No byte order mark detected.';
+				loadStatus.textContent = `${sourceLabel}, ${formatByteSize(
+					bytes.byteLength,
+				)} of raw bytes, ${analysis.candidates.length} encodings scored from the ArrayBuffer. ${bomNote} Recommended decoding: ${analysis.recommendedEncoding}.`;
+			}
+			if (dropzoneBadge) {
+				dropzoneBadge.textContent = sampleKey
+					? `Sample bytes loaded: ${formatByteSize(bytes.byteLength)}`
+					: `Local file loaded: ${formatByteSize(bytes.byteLength)}`;
+			}
+
+			renderCandidates(analysis);
+			select.value = analysis.recommendedEncoding;
+			applyEncoding(analysis.recommendedEncoding);
+		};
+
+		const loadFile = async (file: File): Promise<void> => {
+			if (file.size === 0) {
+				if (loadStatus) {
+					loadStatus.textContent =
+						'That file is empty, so there are no bytes to decode. Choose a subtitle file with content.';
+				}
+				return;
+			}
+			try {
+				const buffer = await file.arrayBuffer();
+				loadBytes(new Uint8Array(buffer), 'Local file read with File.arrayBuffer()', null);
+			} catch {
+				if (loadStatus) {
+					loadStatus.textContent =
+						'The browser could not read that file. Try another subtitle file.';
+				}
+			}
+		};
+
+		for (const button of sampleButtons) {
+			button.addEventListener('click', () => {
+				const sampleKey = button.dataset.encodingSample;
+				if (!sampleKey) return;
+				const sample = buildEncodingSampleBytes(
+					sampleKey as 'gbk-zh' | 'cp1251-ru' | 'shift-jis-ja' | 'cp1252-fr',
+				);
+				loadBytes(sample.bytes, sample.description.replace(/\.$/, ''), sampleKey);
+			});
+		}
+
+		select.addEventListener('change', () => {
+			applyEncoding(select.value as SubtitleEncodingId);
+		});
+		bomSelect.addEventListener('change', () => {
+			applyEncoding(activeEncoding);
+		});
+		eolSelect.addEventListener('change', () => {
+			applyEncoding(activeEncoding);
+		});
+
+		fileInput.addEventListener('change', () => {
+			const file = fileInput.files && fileInput.files[0];
+			if (file) {
+				void loadFile(file).finally(() => {
+					fileInput.value = '';
+				});
+			}
+		});
+
+		let dragDepth = 0;
+		const setDragActive = (active: boolean): void => {
+			dropzone.dataset.dragActive = active ? 'true' : 'false';
+		};
+
+		dropzone.addEventListener('dragenter', (event) => {
+			event.preventDefault();
+			dragDepth += 1;
+			setDragActive(true);
+		});
+		dropzone.addEventListener('dragover', (event) => {
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'copy';
+			}
+			setDragActive(true);
+		});
+		dropzone.addEventListener('dragleave', () => {
+			dragDepth = Math.max(0, dragDepth - 1);
+			if (dragDepth === 0) {
+				setDragActive(false);
+			}
+		});
+		dropzone.addEventListener('drop', (event) => {
+			event.preventDefault();
+			dragDepth = 0;
+			setDragActive(false);
+			const file = event.dataTransfer && event.dataTransfer.files[0];
+			if (file) {
+				void loadFile(file);
+			}
+		});
+
+		copyBtn.addEventListener('click', async () => {
+			if (!activeExport) return;
+			const clipboardText = activeExport.text.replace(/^\uFEFF/, '');
+			try {
+				await navigator.clipboard.writeText(clipboardText);
+			} catch {
+				output.select();
+				document.execCommand('copy');
+			}
+			trackToolEvent('subtitle_export', { export_action: 'copy', output_format: 'srt' });
+			setExportStatus(
+				`Copied repaired UTF-8 text (${clipboardText.length.toLocaleString('en-US')} characters). The BOM setting applies to the downloaded file only.`,
+				activeQc !== null && activeQc.status !== 'clean',
+			);
+			const originalLabel = copyBtn.textContent;
+			copyBtn.textContent = 'Copied';
+			window.setTimeout(() => {
+				copyBtn.textContent = originalLabel;
+			}, 1400);
+		});
+
+		downloadBtn.addEventListener('click', () => {
+			if (!activeExport) return;
+			const blob = new Blob([activeExport.bytes], { type: 'text/plain;charset=utf-8' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = 'repaired-subtitles-utf8.srt';
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', { export_action: 'download', output_format: 'srt' });
+			setExportStatus(
+				`Downloaded ${formatByteSize(activeExport.byteLength)} of UTF-8 with ${
+					activeExport.bom ? 'BOM' : 'no BOM'
+				} and ${activeExport.lineEnding === 'crlf' ? 'CRLF' : 'LF'} line endings.`,
+				activeQc !== null && activeQc.status !== 'clean',
+			);
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		qcDownloadBtn?.addEventListener('click', () => {
+			if (!activeQc) return;
+			const reportText = formatQcReport(activeQc);
+			const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = 'subtitle-encoding-qc.txt';
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', { export_action: 'download', output_format: 'txt' });
+			setExportStatus(
+				`Downloaded a QC report with ${activeQc.issues.length} issue(s) after encoding repair.`,
+				activeQc.status !== 'clean',
+			);
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		const bootSample = buildEncodingSampleBytes('gbk-zh');
+		loadBytes(bootSample.bytes, bootSample.description.replace(/\.$/, ''), 'gbk-zh');
+	}
+
+	document.querySelectorAll<HTMLElement>('[data-encoding-workbench]').forEach(bindWorkbench);
+</script>

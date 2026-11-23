@@ -1,0 +1,393 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import EncodingWorkbench from '../components/EncodingWorkbench.astro';
+import type { RouteFaqItem } from '../lib/types';
+
+const faqs: RouteFaqItem[] = [
+	{
+		question:
+			'Why do subtitles show garbled characters such as mojibake in VLC, Premiere Pro, or Windows Media Player?',
+		answer:
+			'Subtitle files store text as bytes, and a player needs the right code page to turn those bytes back into characters. Files exported by legacy Windows tools, DVD authoring suites, or regional subtitle editors are often written in GBK, Big5, Shift-JIS, EUC-KR, Windows-1251, or Windows-1256 while the player assumes UTF-8. The mismatch produces runs such as aeu, +/- symbols, or U+FFFD replacement boxes. This workbench decodes the same bytes with 11 candidate encodings, ranks them by replacement characters and script coverage, and exports a clean UTF-8 file.',
+	},
+	{
+		question: 'Does this subtitle encoding repair tool upload my file to a server?',
+		answer:
+			'No. The file is read with File.arrayBuffer() inside your browser tab, every decoding candidate is produced by the native TextDecoder API in local memory, and the repaired file is written through a local Blob download. No subtitle bytes, filenames, or text are sent to a server, and there is no file size cap.',
+	},
+	{
+		question: 'Should I export UTF-8 with a BOM or without a BOM for Premiere Pro and Windows?',
+		answer:
+			'Premiere Pro, DaVinci Resolve, VLC, and HTML5 video players read UTF-8 without a BOM correctly, so no BOM is the safest default for video editing and web playback. Choose UTF-8 with BOM when an older Windows application, a spreadsheet, or a legacy QC tool keeps guessing the code page and needs the explicit marker at the start of the file.',
+	},
+	{
+		question: 'Which line ending should I pick, LF or CRLF?',
+		answer:
+			'Choose CRLF for Windows tools such as Premiere Pro, Notepad, and most broadcast QC utilities, because they expect carriage returns between cue blocks. Choose LF for macOS, Linux, web players, and subtitle pipelines that already normalize line endings. The exporter rewrites every cue break consistently, so the choice never mixes endings inside one file.',
+	},
+	{
+		question:
+			'Which legacy encodings can this tool repair for Chinese, Japanese, Korean, Russian, and Arabic subtitles?',
+		answer:
+			'The candidate set covers UTF-8, UTF-16 LE, UTF-16 BE, Windows-1251 for Cyrillic, Windows-1252 for Western European text, Windows-1250 for Central European text, Windows-1256 for Arabic, GB18030 and GBK for Simplified Chinese, Big5 for Traditional Chinese, Shift-JIS for Japanese, and EUC-KR for Korean. The ranking strip shows the top four matches with their score and replacement character count, and you can override the suggestion from the full selector at any time.',
+	},
+];
+
+const relatedTools = [
+	{
+		href: '/',
+		title: 'JSON to SRT Converter',
+		summary:
+			'Convert Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON transcripts into SRT, VTT, TXT, or CSV locally in the browser.',
+	},
+	{
+		href: '/merge-subtitles/',
+		title: 'Merge Subtitles',
+		summary:
+			'Combine two subtitle tracks into one timeline while keeping cue order, numbering, and timing intact.',
+	},
+	{
+		href: '/srt-to-json/',
+		title: 'SRT to JSON',
+		summary:
+			'Turn SubRip cues into structured JSON for scripts, databases, and downstream language tooling.',
+	},
+	{
+		href: '/smi-to-srt/',
+		title: 'SMI to SRT',
+		summary:
+			'Convert SAMI subtitle files into clean SubRip output that editors and players accept without edits.',
+	},
+	{
+		href: '/ttml-to-srt/',
+		title: 'TTML to SRT',
+		summary:
+			'Convert TTML and DFXP timed text into SRT cues with readable timestamps and line breaks.',
+	},
+	{
+		href: '/premiere-pro-srt-import/',
+		title: 'Premiere Pro SRT Import',
+		summary:
+			'Troubleshoot SRT files that Premiere Pro refuses to import, including encoding, numbering, and timing faults.',
+	},
+];
+
+const legacyEncodings = [
+	{
+		name: 'GB18030 / GBK',
+		region: 'China and Singapore',
+		symptom: 'Simplified Chinese looks like Latin symbol runs such as ±êÌâ or Ã¦.',
+		fix: 'Pick GB18030 / GBK, then confirm the repaired column shows readable ideographs.',
+	},
+	{
+		name: 'Big5',
+		region: 'Taiwan and Hong Kong',
+		symptom: 'Traditional Chinese turns into accented Latin letters and stray punctuation.',
+		fix: 'Pick Big5 when the source came from a Taiwanese or Hong Kong broadcaster.',
+	},
+	{
+		name: 'Shift-JIS',
+		region: 'Japan',
+		symptom: 'Kana and kanji appear as half-width katakana noise or question marks.',
+		fix: 'Pick Shift-JIS for legacy Windows and DVD authoring exports.',
+	},
+	{
+		name: 'EUC-KR',
+		region: 'South Korea',
+		symptom: 'Hangul syllables collapse into replacement boxes or blank gaps.',
+		fix: 'Pick EUC-KR for broadcast and DVD subtitle files from Korean vendors.',
+	},
+	{
+		name: 'Windows-1251',
+		region: 'Russia, Ukraine, Bulgaria',
+		symptom: 'Cyrillic words appear as Latin letters mixed with accented symbols.',
+		fix: 'Pick Windows-1251 for legacy Cyrillic subtitle exports and Aegisub projects.',
+	},
+	{
+		name: 'Windows-1256',
+		region: 'Arabic speaking regions',
+		symptom: 'Arabic script appears as accented Latin characters in the wrong order.',
+		fix: 'Pick Windows-1256, then check right-to-left rendering in your player.',
+	},
+	{
+		name: 'Windows-1250',
+		region: 'Poland, Czechia, Slovakia, Hungary',
+		symptom: 'Central European diacritics such as c, e, and z with carons look corrupted.',
+		fix: 'Pick Windows-1250 when Western European candidates leave odd symbols.',
+	},
+	{
+		name: 'Windows-1252',
+		region: 'Western Europe and the Americas',
+		symptom: 'French, Spanish, or German accents appear as multi-symbol runs.',
+		fix: 'Pick Windows-1252 for legacy Western European subtitle files.',
+	},
+];
+---
+
+<BaseLayout
+	title="Fix Subtitle Encoding & Mojibake Online | UTF-8 SRT Converter"
+	description="Repair garbled SRT and VTT subtitles from GBK, Big5, Shift-JIS, Windows-1251, or Windows-1256 into clean UTF-8. Runs 100% in your browser with no uploads and exports UTF-8 with optional BOM and CRLF line endings."
+	canonicalPath="/fix-subtitle-encoding/"
+	faqs={faqs}
+>
+	<section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+		<div class="lg:col-span-7 space-y-3 min-w-0">
+			<div class="inline-flex flex-wrap items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-medium text-sky-900">
+				<span>11 encodings</span>
+				<span class="text-sky-400">/</span>
+				<span>Zero upload</span>
+				<span class="text-sky-400">/</span>
+				<span>UTF-8 BOM and CRLF control</span>
+			</div>
+			<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950">
+				Fix Subtitle Encoding &amp; Mojibake Online (UTF-8 Converter)
+			</h1>
+			<p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
+				Garbled subtitle text is usually a code page mismatch: the bytes are GBK, Big5, Shift-JIS, Windows-1251, or Windows-1256, while the player reads them as UTF-8. Drop the file, inspect the ranked decoding candidates, compare the broken and repaired cues, then export a UTF-8 file with the exact BOM and line endings your editor expects.
+			</p>
+			<div class="flex flex-wrap gap-2 text-xs">
+				<a
+					href="#encoding-workbench"
+					class="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-800 transition-colors"
+				>
+					Open the encoding workbench
+				</a>
+				<a
+					href="#legacy-encodings"
+					class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100 transition-colors"
+				>
+					Legacy encoding guide
+				</a>
+			</div>
+		</div>
+
+		<aside
+			aria-label="Quick technical specification"
+			class="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3 min-w-0"
+		>
+			<div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+				<h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+					Technical Summary
+				</h2>
+				<span class="font-mono text-xs text-slate-500">/fix-subtitle-encoding/</span>
+			</div>
+			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+				<div>
+					<dt class="font-semibold text-slate-900">Decoding candidates</dt>
+					<dd class="text-slate-600 mt-0.5">
+						11 encodings scored per file with the native TextDecoder API
+					</dd>
+				</div>
+				<div>
+					<dt class="font-semibold text-slate-900">Byte access</dt>
+					<dd class="text-slate-600 mt-0.5">
+						File.arrayBuffer() scan in browser RAM, no upload and no size cap
+					</dd>
+				</div>
+				<div>
+					<dt class="font-semibold text-slate-900">Export controls</dt>
+					<dd class="text-slate-600 mt-0.5">
+						UTF-8 with or without BOM, LF or CRLF line endings, exact bytes in the Blob
+					</dd>
+				</div>
+				<div>
+					<dt class="font-semibold text-slate-900">Timeline QC</dt>
+					<dd class="text-slate-600 mt-0.5">
+						Overlaps, reversed ranges, and zero-duration cues reported after repair
+					</dd>
+				</div>
+			</dl>
+		</aside>
+	</section>
+
+	<div id="encoding-workbench" class="scroll-mt-24">
+		<EncodingWorkbench />
+	</div>
+
+	<section
+		id="why-mojibake"
+		aria-labelledby="why-mojibake-heading"
+		class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+	>
+		<div class="space-y-1">
+			<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+				Root cause
+			</p>
+			<h2 id="why-mojibake-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Why subtitles display garbled mojibake across players
+			</h2>
+		</div>
+		<p class="text-sm text-slate-700 leading-relaxed">
+			A subtitle file is a sequence of bytes, not a sequence of characters. When an editor saves Chinese subtitles with the GBK code page, each ideograph becomes a two byte pair. A player that opens the same file as UTF-8 interprets those pairs as unrelated Latin characters, so readable dialogue turns into symbol soup. The same failure happens in reverse when a UTF-8 file is opened by an old tool that assumes a local legacy code page.
+		</p>
+		<ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 leading-relaxed">
+			<li>
+				<strong>Classic mojibake:</strong> accented Latin runs such as <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">Ã©</code> or <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">æµ‹è¯•</code> appear where CJK, Cyrillic, or Arabic text should be.
+			</li>
+			<li>
+				<strong>Replacement boxes:</strong> a strict UTF-8 decoder emits <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">U+FFFD</code> for bytes that cannot form a valid sequence, so the original text is lost until the right code page is applied.
+			</li>
+			<li>
+				<strong>Player differences:</strong> VLC falls back to the system locale, Premiere Pro and Windows tools often assume ANSI or UTF-16, and browsers assume UTF-8. The same file can look correct in one app and broken in another.
+			</li>
+			<li>
+				<strong>Double encoding:</strong> running a legacy file through a UTF-8 only pipeline can re-encode the damage, so always repair from the original bytes instead of copying text out of a broken preview.
+			</li>
+		</ul>
+		<p class="text-sm text-slate-700 leading-relaxed">
+			The workbench never guesses silently. Every candidate is decoded with the browser TextDecoder, scored by replacement character ratio, control characters, private use area density, and script coverage, then shown in the before and after table so you can verify the repair before exporting.
+		</p>
+	</section>
+
+	<section
+		id="bom-line-endings"
+		aria-labelledby="bom-line-endings-heading"
+		class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+	>
+		<div class="space-y-1">
+			<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+				Export settings
+			</p>
+			<h2 id="bom-line-endings-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Choosing UTF-8 with BOM vs no BOM and LF vs CRLF for Premiere, VLC, and Windows
+			</h2>
+		</div>
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+			<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2 min-w-0">
+				<h3 class="text-sm font-semibold text-slate-950">UTF-8 (no BOM)</h3>
+				<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+					Best default for Premiere Pro, DaVinci Resolve, Final Cut Pro, VLC, and HTML5 video tracks. These tools detect UTF-8 from the byte stream and read a BOM as a stray character in the first cue.
+				</p>
+			</div>
+			<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2 min-w-0">
+				<h3 class="text-sm font-semibold text-slate-950">UTF-8 with BOM</h3>
+				<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+					Useful for older Windows applications, spreadsheet imports, and legacy QC utilities that refuse to detect UTF-8 without the leading marker. The exporter writes the exact byte sequence at the start of the Blob.
+				</p>
+			</div>
+			<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2 min-w-0">
+				<h3 class="text-sm font-semibold text-slate-950">LF (Unix, macOS, Web)</h3>
+				<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+					Single newline characters keep files small and match modern web tools, macOS editors, Linux pipelines, and most automation scripts.
+				</p>
+			</div>
+			<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2 min-w-0">
+				<h3 class="text-sm font-semibold text-slate-950">CRLF (Windows, Premiere)</h3>
+				<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+					Carriage return plus newline matches Windows tools, Premiere Pro, and many broadcast QC systems. Pick CRLF when an import dialog reports malformed cue blocks despite correct text.
+				</p>
+			</div>
+		</div>
+		<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+			The BOM and line ending choices are applied byte for byte when the download Blob is created. Changing the selector updates the preview and the reported byte size immediately, so you can verify the exact payload before saving.
+		</p>
+	</section>
+
+	<section
+		id="legacy-encodings"
+		aria-labelledby="legacy-encodings-heading"
+		class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4"
+	>
+		<div class="space-y-1">
+			<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+				Regional reference
+			</p>
+			<h2 id="legacy-encodings-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Legacy regional encoding guide for GBK, Big5, Shift-JIS, CP1251, and CP1256
+			</h2>
+			<p class="text-sm text-slate-600">
+				Match the origin of the subtitle file to the code page below, then confirm the repaired column in the workbench before exporting.
+			</p>
+		</div>
+		<div class="overflow-x-auto rounded-xl border border-slate-200">
+			<table class="w-full min-w-[40rem] text-left border-collapse text-xs sm:text-sm">
+				<thead>
+					<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[11px]">
+						<th scope="col" class="py-2.5 px-3 font-semibold">Code page</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Region</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Mojibake symptom</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Repair choice</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-100">
+					{
+						legacyEncodings.map((row) => (
+							<tr>
+								<th scope="row" class="py-2.5 px-3 font-semibold text-slate-900 align-top break-words">
+									{row.name}
+								</th>
+								<td class="py-2.5 px-3 text-slate-600 align-top break-words">{row.region}</td>
+								<td class="py-2.5 px-3 text-slate-700 align-top break-words">{row.symptom}</td>
+								<td class="py-2.5 px-3 text-slate-700 align-top break-words">{row.fix}</td>
+							</tr>
+						))
+					}
+				</tbody>
+			</table>
+		</div>
+		<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+			Korean files from DVD authoring suites are often EUC-KR, while Arabic broadcast files are usually Windows-1256. When two candidates score closely, compare the repaired column: the correct code page produces readable script with zero replacement characters.
+		</p>
+	</section>
+
+	<section
+		id="related-tools"
+		aria-labelledby="related-tools-heading"
+		class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5"
+	>
+		<div class="space-y-1">
+			<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+				Internal subtitle tool matrix
+			</p>
+			<h2 id="related-tools-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Related subtitle tools
+			</h2>
+			<p class="text-sm text-slate-600">
+				Each tool runs in your browser and keeps transcript files on your own device.
+			</p>
+		</div>
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+			{
+				relatedTools.map((tool) => (
+					<a
+						href={tool.href}
+						class="group rounded-xl border border-slate-200 bg-white p-4 sm:p-5 flex flex-col justify-between gap-3 transition-colors hover:border-sky-400 hover:bg-slate-50/70 min-w-0"
+					>
+						<div class="space-y-1.5 min-w-0">
+							<h3 class="text-sm sm:text-base font-bold text-slate-950 group-hover:text-sky-700 transition-colors break-words">
+								{tool.title}
+							</h3>
+							<p class="text-xs text-slate-600 leading-relaxed break-words">{tool.summary}</p>
+						</div>
+						<div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+							<code class="font-mono text-[11px] text-slate-700 break-all">{tool.href}</code>
+							<span class="font-semibold text-sky-700 group-hover:translate-x-0.5 transition-transform">
+								Open tool -&gt;
+							</span>
+						</div>
+					</a>
+				))
+			}
+		</div>
+	</section>
+
+	<section
+		id="faq"
+		aria-labelledby="faq-heading"
+		class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5"
+	>
+		<h2 id="faq-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+			Subtitle encoding FAQ
+		</h2>
+		<dl class="divide-y divide-slate-100">
+			{
+				faqs.map((item) => (
+					<div class="py-4 first:pt-0 last:pb-0 space-y-1.5">
+						<dt class="text-sm sm:text-base font-semibold text-slate-900">{item.question}</dt>
+						<dd class="text-sm text-slate-600 leading-relaxed">{item.answer}</dd>
+					</div>
+				))
+			}
+		</dl>
+	</section>
+</BaseLayout>

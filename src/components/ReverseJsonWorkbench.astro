@@ -1,0 +1,817 @@
+---
+import {
+	convertSubtitleToJson,
+	SAMPLE_REVERSE_SUBTITLES,
+	type ReverseJsonSchemaId,
+	type SubtitleToJsonOptions,
+} from '../lib/subtitle-to-json';
+
+interface SchemaOption {
+	id: ReverseJsonSchemaId;
+	label: string;
+	detail: string;
+}
+
+interface SampleButton {
+	key: keyof typeof SAMPLE_REVERSE_SUBTITLES;
+	testId: string;
+	label: string;
+	formatTag: string;
+}
+
+const SCHEMA_OPTIONS: SchemaOption[] = [
+	{
+		id: 'openai-verbose-json',
+		label: 'OpenAI Whisper verbose_json',
+		detail: 'text + segments[{ id, start, end, text }]',
+	},
+	{
+		id: 'deepgram-utterances',
+		label: 'Deepgram utterances',
+		detail: 'results.utterances[{ start, end, transcript, speaker }]',
+	},
+	{
+		id: 'generic-timestamped',
+		label: 'Generic timestamped JSON',
+		detail: 'cues[{ index, start, end, duration, text }]',
+	},
+];
+
+const SAMPLE_BUTTONS: SampleButton[] = [
+	{ key: 'srt-speakers', testId: 'reverse-sample-srt', label: 'Load SRT sample', formatTag: '.srt' },
+	{ key: 'vtt-web', testId: 'reverse-sample-vtt', label: 'Load WebVTT sample', formatTag: '.vtt' },
+	{ key: 'ass-dialogue', testId: 'reverse-sample-ass', label: 'Load ASS sample', formatTag: '.ass' },
+];
+
+const FORMAT_LABELS: Record<'srt' | 'vtt' | 'ass', string> = {
+	srt: 'SRT',
+	vtt: 'WebVTT',
+	ass: 'ASS',
+};
+
+const INITIAL_SAMPLE = SAMPLE_REVERSE_SUBTITLES['srt-speakers'];
+const INITIAL_OPTIONS: SubtitleToJsonOptions = {
+	schema: 'openai-verbose-json',
+	timestampUnit: 'seconds',
+	language: 'en',
+	detectSpeakers: true,
+	prettyIndent: 2,
+};
+const initialResult = convertSubtitleToJson(INITIAL_SAMPLE.content, INITIAL_OPTIONS);
+const initialQc = initialResult.ok ? initialResult.qc : null;
+const initialIssues = initialQc ? initialQc.issues.slice(0, 12) : [];
+const initialSpeakerText = initialResult.ok
+	? initialResult.speakers.length > 0
+		? initialResult.speakers.join(', ')
+		: 'none detected'
+	: '';
+const initialBaseName = INITIAL_SAMPLE.filename.replace(/\.[^.]+$/, '') || 'subtitles';
+
+function formatDuration(sec: number): string {
+	const safe = Math.max(0, Number.isFinite(sec) ? sec : 0);
+	const mins = Math.floor(safe / 60);
+	const rem = safe - mins * 60;
+	const mm = String(mins).padStart(2, '0');
+	const ss = rem.toFixed(1).padStart(4, '0');
+	return `${mm}:${ss} (${safe.toFixed(1)}s)`;
+}
+---
+
+<section
+	aria-label="Subtitle to JSON workbench"
+	class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+	data-reverse-workbench
+	data-default-basename={initialBaseName}
+>
+	<div class="border-b border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<div class="flex flex-wrap items-center gap-2">
+				<span class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Reverse Pipeline
+				</span>
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 border border-emerald-200">
+					<span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>
+					<span>Local File.text() / No size cap</span>
+				</span>
+			</div>
+			<span class="text-xs text-slate-500">Subtitle in, structured JSON out</span>
+		</div>
+
+		<div class="space-y-1.5">
+			<p class="text-xs font-semibold text-slate-700">Sample subtitle tracks</p>
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+				{
+					SAMPLE_BUTTONS.map((sample) => (
+						<button
+							type="button"
+							data-testid={sample.testId}
+							data-reverse-sample={sample.key}
+							class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-800 transition-colors hover:border-sky-400 hover:bg-sky-50/60 cursor-pointer flex items-center justify-between gap-2"
+						>
+							<span class="break-words">{sample.label}</span>
+							<span class="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+								{sample.formatTag}
+							</span>
+						</button>
+					))
+				}
+			</div>
+		</div>
+
+		<div
+			data-reverse-dropzone
+			data-drag-active="false"
+			class="rounded-xl border-2 border-dashed border-slate-300 bg-white p-3 space-y-2 transition-colors hover:border-sky-400"
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<label
+					for="reverse-file-upload"
+					class="text-xs font-semibold text-slate-800 cursor-pointer break-words"
+				>
+					Drop .srt, .vtt, .ass, or .ssa subtitles here or choose a file
+				</label>
+				<span
+					data-reverse-dropzone-badge
+					class="text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5"
+				>
+					No file size cap / Zero upload
+				</span>
+			</div>
+			<input
+				id="reverse-file-upload"
+				data-testid="reverse-file-upload"
+				type="file"
+				accept=".srt,.vtt,.ass,.ssa,text/plain"
+				class="block w-full min-w-0 text-xs text-slate-700 file:mr-3 file:min-h-9 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800 cursor-pointer"
+			/>
+		</div>
+
+		<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
+			<div class="flex flex-col gap-1 min-w-0">
+				<label for="reverse-schema-select" class="text-xs font-semibold text-slate-700">
+					JSON Schema Preset
+				</label>
+				<select
+					id="reverse-schema-select"
+					data-testid="reverse-schema-select"
+					class="min-h-11 sm:min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-sky-600 focus:outline-none"
+				>
+					{
+						SCHEMA_OPTIONS.map((option) => (
+							<option value={option.id} selected={option.id === INITIAL_OPTIONS.schema}>
+								{option.label}
+							</option>
+						))
+					}
+				</select>
+				<p data-reverse-schema-detail class="text-[11px] text-slate-500 break-words">
+					{SCHEMA_OPTIONS.find((option) => option.id === INITIAL_OPTIONS.schema)?.detail}
+				</p>
+			</div>
+
+			<div data-control="timestamp" data-control-active="false" class="flex flex-col gap-1 min-w-0 opacity-60">
+				<label for="reverse-timestamp-unit" class="text-xs font-semibold text-slate-700">
+					Timestamp Unit
+				</label>
+				<select
+					id="reverse-timestamp-unit"
+					data-testid="reverse-timestamp-unit"
+					class="min-h-11 sm:min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-600 focus:outline-none"
+				>
+					<option value="seconds" selected>Seconds (12.345)</option>
+					<option value="milliseconds">Milliseconds (12345)</option>
+				</select>
+				<p class="text-[11px] text-slate-500">Applies to generic timestamped JSON.</p>
+			</div>
+
+			<div data-control="language" data-control-active="true" class="flex flex-col gap-1 min-w-0">
+				<label for="reverse-language-input" class="text-xs font-semibold text-slate-700">
+					Language Code
+				</label>
+				<input
+					id="reverse-language-input"
+					data-testid="reverse-language-input"
+					type="text"
+					value="en"
+					maxlength="16"
+					autocomplete="off"
+					spellcheck="false"
+					class="min-h-11 sm:min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-600 focus:outline-none"
+				/>
+				<p class="text-[11px] text-slate-500">Applies to OpenAI verbose_json.</p>
+			</div>
+
+			<div class="flex flex-col gap-1 min-w-0">
+				<span class="text-xs font-semibold text-slate-700">Speaker Detection</span>
+				<label
+					for="reverse-detect-speakers"
+					class="min-h-11 sm:min-h-10 w-full inline-flex items-center gap-2.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 select-none cursor-pointer hover:bg-slate-50"
+				>
+					<input
+						id="reverse-detect-speakers"
+						data-testid="reverse-detect-speakers"
+						type="checkbox"
+						checked
+						class="h-4 w-4 shrink-0 rounded border-slate-300 text-sky-600 focus:ring-sky-600"
+					/>
+					<span class="leading-tight">Auto-detect speaker prefixes</span>
+				</label>
+				<p class="text-[11px] text-slate-500 break-words">
+					Reads [SPEAKER_00]:, [Host], WebVTT voice spans, and ASS actor names.
+				</p>
+			</div>
+		</div>
+
+		<div
+			data-testid="reverse-status"
+			data-status={initialResult.ok ? 'ok' : 'error'}
+			data-input-format={initialResult.ok ? initialResult.inputFormat : ''}
+			data-cue-count={String(initialResult.ok ? initialResult.cueCount : 0)}
+			data-speaker-count={String(initialResult.ok ? initialResult.speakers.length : 0)}
+			role="status"
+			aria-live="polite"
+			class:list={[
+				'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium border min-w-0 break-words',
+				initialResult.ok
+					? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+					: 'bg-rose-50 border-rose-200 text-rose-900',
+			]}
+		>
+			{
+				initialResult.ok ? (
+					<span>
+						Detected: <strong>{FORMAT_LABELS[initialResult.inputFormat]}</strong> |{' '}
+						{initialResult.cueCount} {initialResult.cueCount === 1 ? 'cue' : 'cues'} | Duration:{' '}
+						{formatDuration(initialResult.durationSec)} | Speakers: {initialSpeakerText}
+					</span>
+				) : (
+					<span>Input error: {initialResult.error}</span>
+				)
+			}
+		</div>
+
+		<div
+			data-testid="reverse-qc-summary"
+			data-qc-state={initialQc ? initialQc.status : 'empty'}
+			data-qc-errors={String(initialQc?.errorCount ?? 0)}
+			data-qc-warnings={String(initialQc?.warningCount ?? 0)}
+			aria-label="Timeline QC summary for reverse conversion"
+			class:list={[
+				'rounded-xl border p-3.5 space-y-2 min-w-0',
+				initialQc && initialQc.status === 'error'
+					? 'bg-rose-50/70 border-rose-300 text-rose-950'
+					: initialQc && initialQc.status === 'warning'
+						? 'bg-amber-50/70 border-amber-300 text-amber-950'
+						: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+			]}
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="text-xs font-semibold uppercase tracking-wider">Timeline QC</span>
+				<button
+					type="button"
+					data-testid="reverse-qc-download-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Download .qc.txt
+				</button>
+			</div>
+			<p data-reverse-qc-summary-text class="text-xs font-medium break-words">
+				{initialQc ? initialQc.summary : 'Timeline QC did not run for this input.'}
+			</p>
+			<ul
+				data-reverse-qc-issues
+				class="space-y-1 text-xs leading-relaxed list-disc pl-5 break-words"
+			>
+				{
+					initialIssues.length === 0 ? (
+						<li data-qc-code="clean" class="list-none pl-0 text-emerald-900">
+							{initialQc ? 'No timeline QC issues detected.' : 'No timeline QC data for this input.'}
+						</li>
+					) : (
+						initialIssues.map((issue) => (
+							<li data-qc-code={issue.code} data-qc-scope={issue.scope} data-qc-index={String(issue.index)}>
+								[{issue.code}] {issue.message}
+							</li>
+						))
+					)
+				}
+			</ul>
+			<p data-reverse-qc-more class="text-[11px] opacity-80 break-words">
+				{initialQc && initialQc.issues.length > initialIssues.length
+					? `Showing ${initialIssues.length} of ${initialQc.issues.length} issues. Download the QC report for the full list.`
+					: 'Timing issues are reported, never silently repaired.'}
+			</p>
+		</div>
+	</div>
+
+	<div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+		<div class="p-4 sm:p-6 flex flex-col gap-2 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2 min-h-10">
+				<label
+					for="reverse-input"
+					class="text-xs font-semibold uppercase tracking-wider text-slate-600"
+				>
+					Subtitle Input (SRT, WebVTT, ASS)
+				</label>
+				<span data-reverse-input-hint class="text-[11px] sm:text-xs text-slate-500 font-mono break-words">
+					{INITIAL_SAMPLE.filename}
+				</span>
+			</div>
+			<textarea
+				id="reverse-input"
+				data-testid="reverse-input"
+				rows="18"
+				spellcheck="false"
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="off"
+				placeholder="Paste SubRip, WebVTT, or ASS subtitle text here..."
+				class="w-full min-w-0 rounded-xl border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{INITIAL_SAMPLE.content}</textarea>
+		</div>
+
+		<div class="p-4 sm:p-6 flex flex-col gap-2 bg-slate-50/40 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2 min-h-10">
+				<label
+					for="reverse-json-output"
+					class="text-xs font-semibold uppercase tracking-wider text-slate-600"
+				>
+					Structured JSON Output
+				</label>
+				<div class="flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						data-testid="reverse-copy-btn"
+						class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+					>
+						Copy JSON
+					</button>
+					<button
+						type="button"
+						data-testid="reverse-download-btn"
+						class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50"
+					>
+						Download .json
+					</button>
+				</div>
+			</div>
+			<p
+				data-testid="reverse-export-status"
+				data-export-risk="false"
+				role="status"
+				aria-live="polite"
+				class="hidden rounded-lg px-3 py-2 text-xs font-medium break-words"
+			></p>
+			<textarea
+				id="reverse-json-output"
+				data-testid="reverse-json-output"
+				rows="18"
+				readonly
+				spellcheck="false"
+				autocomplete="off"
+				class="w-full min-w-0 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{initialResult.ok ? initialResult.json : ''}</textarea>
+		</div>
+	</div>
+</section>
+
+<script>
+	import { trackToolEvent } from '../lib/analytics';
+	import {
+		convertSubtitleToJson,
+		SAMPLE_REVERSE_SUBTITLES,
+		type ReverseJsonSchemaId,
+		type SubtitleToJsonOptions,
+		type TimestampUnit,
+	} from '../lib/subtitle-to-json';
+	import { formatQcReport, type QcIssue, type TimelineQcReport } from '../lib/timeline-qc';
+
+	type InputFormat = 'srt' | 'vtt' | 'ass';
+
+	const FORMAT_LABELS: Record<InputFormat, string> = {
+		srt: 'SRT',
+		vtt: 'WebVTT',
+		ass: 'ASS',
+	};
+
+	const SCHEMA_DETAILS: Record<ReverseJsonSchemaId, string> = {
+		'openai-verbose-json': 'text + segments[{ id, start, end, text }]',
+		'deepgram-utterances': 'results.utterances[{ start, end, transcript, speaker }]',
+		'generic-timestamped': 'cues[{ index, start, end, duration, text }]',
+	};
+
+	const INPUT_FORMATS = new Set<InputFormat>(['srt', 'vtt', 'ass']);
+
+	function isInputFormat(value: string): value is InputFormat {
+		return INPUT_FORMATS.has(value as InputFormat);
+	}
+
+	function formatDuration(sec: number): string {
+		const safe = Math.max(0, Number.isFinite(sec) ? sec : 0);
+		const mins = Math.floor(safe / 60);
+		const rem = safe - mins * 60;
+		const mm = String(mins).padStart(2, '0');
+		const ss = rem.toFixed(1).padStart(4, '0');
+		return `${mm}:${ss} (${safe.toFixed(1)}s)`;
+	}
+
+	function formatByteSize(bytes: number): string {
+		if (bytes >= 1_000_000) {
+			return `${(bytes / 1_000_000).toFixed(2)} MB`;
+		}
+		if (bytes >= 1_000) {
+			return `${(bytes / 1_000).toFixed(1)} KB`;
+		}
+		return `${bytes} B`;
+	}
+
+	function stripExtension(filename: string): string {
+		const base = filename.replace(/\.[^.]+$/, '').trim();
+		return base.length > 0 ? base : 'subtitles';
+	}
+
+	function bindReverseWorkbench(root: HTMLElement): void {
+		const input = root.querySelector<HTMLTextAreaElement>('[data-testid="reverse-input"]');
+		const fileUpload = root.querySelector<HTMLInputElement>('[data-testid="reverse-file-upload"]');
+		const dropzone = root.querySelector<HTMLElement>('[data-reverse-dropzone]');
+		const dropzoneBadge = root.querySelector<HTMLElement>('[data-reverse-dropzone-badge]');
+		const inputHint = root.querySelector<HTMLElement>('[data-reverse-input-hint]');
+		const sampleButtons = Array.from(
+			root.querySelectorAll<HTMLButtonElement>('[data-reverse-sample]'),
+		);
+		const schemaSelect = root.querySelector<HTMLSelectElement>('[data-testid="reverse-schema-select"]');
+		const unitSelect = root.querySelector<HTMLSelectElement>('[data-testid="reverse-timestamp-unit"]');
+		const languageInput = root.querySelector<HTMLInputElement>('[data-testid="reverse-language-input"]');
+		const speakerCheckbox = root.querySelector<HTMLInputElement>(
+			'[data-testid="reverse-detect-speakers"]',
+		);
+		const statusBox = root.querySelector<HTMLElement>('[data-testid="reverse-status"]');
+		const qcBox = root.querySelector<HTMLElement>('[data-testid="reverse-qc-summary"]');
+		const qcSummaryText = root.querySelector<HTMLElement>('[data-reverse-qc-summary-text]');
+		const qcIssuesList = root.querySelector<HTMLElement>('[data-reverse-qc-issues]');
+		const qcMore = root.querySelector<HTMLElement>('[data-reverse-qc-more]');
+		const qcDownloadBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="reverse-qc-download-btn"]',
+		);
+		const output = root.querySelector<HTMLTextAreaElement>('[data-testid="reverse-json-output"]');
+		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="reverse-copy-btn"]');
+		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="reverse-download-btn"]');
+		const exportStatus = root.querySelector<HTMLElement>('[data-testid="reverse-export-status"]');
+		const timestampWrap = root.querySelector<HTMLElement>('[data-control="timestamp"]');
+		const languageWrap = root.querySelector<HTMLElement>('[data-control="language"]');
+		const schemaDetail = root.querySelector<HTMLElement>('[data-reverse-schema-detail]');
+
+		if (
+			!input ||
+			!fileUpload ||
+			!sampleButtons ||
+			!schemaSelect ||
+			!unitSelect ||
+			!languageInput ||
+			!speakerCheckbox ||
+			!statusBox ||
+			!output ||
+			!copyBtn ||
+			!downloadBtn
+		) {
+			return;
+		}
+
+		let activeRawText = input.value;
+		let activeBaseName = root.dataset.defaultBasename || 'subtitles';
+		let activeQc: TimelineQcReport | null = null;
+		let fullJson = output.value;
+
+		const readOptions = (): SubtitleToJsonOptions => {
+			const schema = (schemaSelect.value as ReverseJsonSchemaId) || 'generic-timestamped';
+			const timestampUnit: TimestampUnit =
+				unitSelect.value === 'milliseconds' ? 'milliseconds' : 'seconds';
+			const language = languageInput.value.trim() || 'en';
+			return {
+				schema,
+				timestampUnit,
+				language,
+				detectSpeakers: speakerCheckbox.checked,
+				prettyIndent: 2,
+			};
+		};
+
+		const syncControlMode = (schema: ReverseJsonSchemaId): void => {
+			if (schemaDetail) {
+				schemaDetail.textContent = SCHEMA_DETAILS[schema] ?? '';
+			}
+			const unitActive = schema === 'generic-timestamped';
+			const languageActive = schema === 'openai-verbose-json';
+			if (timestampWrap) {
+				timestampWrap.dataset.controlActive = unitActive ? 'true' : 'false';
+				timestampWrap.classList.toggle('opacity-60', !unitActive);
+			}
+			if (languageWrap) {
+				languageWrap.dataset.controlActive = languageActive ? 'true' : 'false';
+				languageWrap.classList.toggle('opacity-60', !languageActive);
+			}
+		};
+
+		const setExportStatus = (message: string, risk: boolean): void => {
+			if (!exportStatus) return;
+			exportStatus.textContent = message;
+			exportStatus.dataset.exportRisk = risk ? 'true' : 'false';
+			if (!message) {
+				exportStatus.className = 'hidden rounded-lg px-3 py-2 text-xs font-medium';
+				return;
+			}
+			exportStatus.className = risk
+				? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 break-words'
+				: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950 break-words';
+		};
+
+		const qcToneClass = (state: TimelineQcReport['status'] | 'empty'): string => {
+			if (state === 'error') return 'bg-rose-50/70 border-rose-300 text-rose-950';
+			if (state === 'warning') return 'bg-amber-50/70 border-amber-300 text-amber-950';
+			if (state === 'clean') return 'bg-emerald-50/60 border-emerald-200 text-emerald-950';
+			return 'bg-slate-50 border-slate-200 text-slate-800';
+		};
+
+		const renderStatus = (format: InputFormat | null, cueCount: number, durationSec: number, speakers: string[], error: string | null): void => {
+			if (error !== null) {
+				statusBox.dataset.status = 'error';
+				statusBox.dataset.inputFormat = format ?? '';
+				statusBox.dataset.cueCount = '0';
+				statusBox.dataset.speakerCount = '0';
+				statusBox.className =
+					'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium border min-w-0 break-words bg-rose-50 border-rose-200 text-rose-900';
+				statusBox.textContent = `Input error: ${error}`;
+				return;
+			}
+			const label = format ? FORMAT_LABELS[format] : 'Unknown';
+			const cueWord = cueCount === 1 ? 'cue' : 'cues';
+			const speakerText = speakers.length > 0 ? speakers.join(', ') : 'none detected';
+			statusBox.dataset.status = 'ok';
+			statusBox.dataset.inputFormat = format ?? '';
+			statusBox.dataset.cueCount = String(cueCount);
+			statusBox.dataset.speakerCount = String(speakers.length);
+			statusBox.className =
+				'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium border min-w-0 break-words bg-emerald-50/80 border-emerald-200 text-emerald-950';
+			statusBox.textContent =
+				`Detected: ${label} | ${cueCount} ${cueWord} | Duration: ${formatDuration(durationSec)} | Speakers: ${speakerText}`;
+		};
+
+		const renderQc = (report: TimelineQcReport | null): void => {
+			activeQc = report;
+			const state = report ? report.status : 'empty';
+			if (qcBox) {
+				qcBox.dataset.qcState = state;
+				qcBox.dataset.qcErrors = String(report?.errorCount ?? 0);
+				qcBox.dataset.qcWarnings = String(report?.warningCount ?? 0);
+				qcBox.className = `rounded-xl border p-3.5 space-y-2 min-w-0 ${qcToneClass(state)}`;
+			}
+			if (qcSummaryText) {
+				qcSummaryText.textContent = report
+					? report.summary
+					: 'Timeline QC did not run for this input.';
+			}
+			if (qcIssuesList) {
+				const fragment = document.createDocumentFragment();
+				const issues: QcIssue[] = report ? report.issues.slice(0, 12) : [];
+				if (!report) {
+					const empty = document.createElement('li');
+					empty.dataset.qcCode = 'empty';
+					empty.className = 'list-none pl-0';
+					empty.textContent = 'No timeline QC data for this input.';
+					fragment.appendChild(empty);
+				} else if (issues.length === 0) {
+					const clean = document.createElement('li');
+					clean.dataset.qcCode = 'clean';
+					clean.className = 'list-none pl-0 text-emerald-900';
+					clean.textContent = 'No timeline QC issues detected.';
+					fragment.appendChild(clean);
+				} else {
+					for (const issue of issues) {
+						const item = document.createElement('li');
+						item.dataset.qcCode = issue.code;
+						item.dataset.qcScope = issue.scope;
+						item.dataset.qcIndex = String(issue.index);
+						item.textContent = `[${issue.code}] ${issue.message}`;
+						fragment.appendChild(item);
+					}
+				}
+				qcIssuesList.replaceChildren(fragment);
+			}
+			if (qcMore) {
+				qcMore.textContent =
+					report && report.issues.length > 12
+						? `Showing 12 of ${report.issues.length} issues. Download the QC report for the full list.`
+						: 'Timing issues are reported, never silently repaired.';
+			}
+			if (qcDownloadBtn) {
+				qcDownloadBtn.disabled = !report;
+			}
+		};
+
+		const runConversion = (): void => {
+			const options = readOptions();
+			syncControlMode(options.schema);
+			const result = convertSubtitleToJson(activeRawText, options);
+
+			if (result.ok) {
+				fullJson = result.json;
+				output.value = result.json;
+				copyBtn.disabled = fullJson.length === 0;
+				downloadBtn.disabled = fullJson.length === 0;
+				renderStatus(
+					isInputFormat(result.inputFormat) ? result.inputFormat : null,
+					result.cueCount,
+					result.durationSec,
+					result.speakers,
+					null,
+				);
+				renderQc(result.qc);
+			} else {
+				fullJson = '';
+				output.value = '';
+				copyBtn.disabled = true;
+				downloadBtn.disabled = true;
+				renderStatus(null, 0, 0, [], result.error);
+				renderQc(null);
+			}
+			setExportStatus('', false);
+		};
+
+		const ingestLocalFile = async (file: File): Promise<void> => {
+			const text = await file.text();
+			activeRawText = text;
+			activeBaseName = stripExtension(file.name);
+			input.value = text;
+			if (inputHint) {
+				inputHint.textContent = `${file.name} (${formatByteSize(file.size)})`;
+			}
+			if (dropzoneBadge) {
+				dropzoneBadge.textContent = `Loaded ${formatByteSize(file.size)} locally`;
+			}
+			runConversion();
+			trackToolEvent('file_loaded', {
+				size_bucket: file.size > 2_000_000 ? 'gt_2mb' : 'lte_2mb',
+			});
+		};
+
+		const saveBlob = (content: string, mimeType: string, filename: string): void => {
+			const blob = new Blob([content], { type: mimeType });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = filename;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		};
+
+		const announceJsonExport = (action: 'copy' | 'download'): void => {
+			if (activeQc && activeQc.status !== 'clean') {
+				setExportStatus(
+					`Exported JSON with timeline QC ${activeQc.status}: ${activeQc.errorCount} error(s), ${activeQc.warningCount} warning(s). Review the Timeline QC panel before you rely on these timings.`,
+					true,
+				);
+				return;
+			}
+			setExportStatus(
+				action === 'copy'
+					? 'Copied JSON to the clipboard.'
+					: 'Downloaded the JSON file locally.',
+				false,
+			);
+		};
+
+		for (const button of sampleButtons) {
+			button.addEventListener('click', () => {
+				const key = button.dataset.reverseSample as
+					| keyof typeof SAMPLE_REVERSE_SUBTITLES
+					| undefined;
+				if (!key) return;
+				const sample = SAMPLE_REVERSE_SUBTITLES[key];
+				if (!sample) return;
+				activeRawText = sample.content;
+				activeBaseName = stripExtension(sample.filename);
+				input.value = sample.content;
+				if (inputHint) {
+					inputHint.textContent = sample.filename;
+				}
+				runConversion();
+			});
+		}
+
+		if (dropzone) {
+			dropzone.addEventListener('dragenter', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = 'copy';
+				}
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragleave', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				const related = event.relatedTarget as Node | null;
+				if (!related || !dropzone.contains(related)) {
+					dropzone.dataset.dragActive = 'false';
+				}
+			});
+
+			dropzone.addEventListener('drop', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'false';
+				const file = event.dataTransfer?.files?.[0];
+				if (file) {
+					void ingestLocalFile(file);
+				}
+			});
+		}
+
+		input.addEventListener('dragover', (event) => {
+			if (event.dataTransfer?.types.includes('Files')) {
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		});
+
+		input.addEventListener('drop', (event) => {
+			const file = event.dataTransfer?.files?.[0];
+			if (file) {
+				event.preventDefault();
+				void ingestLocalFile(file);
+			}
+		});
+
+		input.addEventListener('input', () => {
+			activeRawText = input.value;
+			runConversion();
+		});
+
+		fileUpload.addEventListener('change', () => {
+			const file = fileUpload.files?.[0];
+			if (!file) return;
+			void ingestLocalFile(file);
+		});
+
+		schemaSelect.addEventListener('change', runConversion);
+		unitSelect.addEventListener('change', runConversion);
+		languageInput.addEventListener('input', runConversion);
+		speakerCheckbox.addEventListener('change', runConversion);
+
+		copyBtn.addEventListener('click', async () => {
+			if (!fullJson) return;
+			try {
+				await navigator.clipboard.writeText(fullJson);
+			} catch {
+				output.focus();
+				output.select();
+				document.execCommand('copy');
+			}
+			trackToolEvent('subtitle_export', { export_action: 'copy', output_format: 'json' });
+			announceJsonExport('copy');
+			const originalLabel = copyBtn.textContent;
+			copyBtn.textContent = 'Copied';
+			window.setTimeout(() => {
+				copyBtn.textContent = originalLabel;
+			}, 1400);
+		});
+
+		downloadBtn.addEventListener('click', () => {
+			if (!fullJson) return;
+			saveBlob(
+				fullJson,
+				'application/json;charset=utf-8',
+				`${activeBaseName || 'subtitles'}.json`,
+			);
+			trackToolEvent('subtitle_export', { export_action: 'download', output_format: 'json' });
+			announceJsonExport('download');
+		});
+
+		qcDownloadBtn?.addEventListener('click', () => {
+			if (!activeQc) return;
+			saveBlob(
+				formatQcReport(activeQc),
+				'text/plain;charset=utf-8',
+				`${activeBaseName || 'subtitles'}.qc.txt`,
+			);
+			setExportStatus('Downloaded the QC report locally.', false);
+		});
+
+		runConversion();
+	}
+
+	document
+		.querySelectorAll<HTMLElement>('[data-reverse-workbench]')
+		.forEach(bindReverseWorkbench);
+</script>

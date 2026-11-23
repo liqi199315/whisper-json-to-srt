@@ -1,0 +1,1587 @@
+---
+import {
+	MAX_MERGE_TRACKS,
+	MIN_MERGE_TRACKS,
+	SAMPLE_BILINGUAL_TRACKS,
+	mergeSubtitleTracks,
+} from '../lib/subtitle-merge';
+import type { MergeCueDiffItem, MergeMode, MergeSubtitlesOptions } from '../lib/subtitle-merge';
+import { formatTimestamp } from '../lib/subtitle-engine';
+
+interface WorkbenchTrack {
+	uid: string;
+	name: string;
+	label: string;
+	content: string;
+}
+
+const INITIAL_OPTIONS: MergeSubtitlesOptions = {
+	mode: 'stacked',
+	outputFormat: 'srt',
+	toleranceMs: 250,
+	sequentialGapMs: 500,
+	includeLabels: true,
+};
+
+const MODE_TEXT: Record<MergeMode, string> = {
+	stacked: 'Stacked bilingual',
+	interleave: 'Time-sorted interleave',
+	sequential: 'Sequential append',
+};
+
+const MODE_OPTIONS: Array<{ id: MergeMode; label: string; detail: string }> = [
+	{
+		id: 'stacked',
+		label: 'Stacked',
+		detail: 'Bilingual stacked lines in one cue',
+	},
+	{
+		id: 'interleave',
+		label: 'Interleave',
+		detail: 'Time-sorted chronological cues',
+	},
+	{
+		id: 'sequential',
+		label: 'Sequential',
+		detail: 'Append tracks end to end',
+	},
+];
+
+const initialTracks: WorkbenchTrack[] = SAMPLE_BILINGUAL_TRACKS.map((track, index) => ({
+	uid: `sample-track-${index + 1}`,
+	name: track.name,
+	label: track.label ?? '',
+	content: track.content,
+}));
+
+const initialResult = mergeSubtitleTracks(SAMPLE_BILINGUAL_TRACKS, INITIAL_OPTIONS);
+const initialStats = initialResult.ok ? initialResult.stats : null;
+const initialQc = initialResult.ok ? initialResult.qc : null;
+const initialDiff = initialResult.ok ? initialResult.diffPreview : [];
+const initialOutput = initialResult.ok ? initialResult.output : '';
+const diffRows = initialDiff.slice(0, 50);
+const initialIssues = initialQc ? initialQc.issues.slice(0, 25) : [];
+
+const initialSourceLabels = new Map(
+	SAMPLE_BILINGUAL_TRACKS.map((track, index) => [
+		track.id ?? `track-${index + 1}`,
+		(track.label ?? '').trim() || track.name || `Track ${index + 1}`,
+	]),
+);
+
+const initialStatusText = initialStats
+	? `${initialStats.trackCount} of ${initialTracks.length} tracks merged into ${initialStats.outputCueCount} cues (${MODE_TEXT[INITIAL_OPTIONS.mode]}). ${initialStats.alignedCount} aligned, ${initialStats.driftCount} drift, ${initialStats.overlapCount} overlap, ${initialStats.unmatchedCount} unmatched.`
+	: 'Merge preview is unavailable for the bundled sample. Load two tracks to start.';
+
+const STATUS_BADGE_CLASS: Record<MergeCueDiffItem['status'], string> = {
+	aligned: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+	drift: 'bg-amber-50 text-amber-900 border-amber-300',
+	overlap: 'bg-rose-50 text-rose-900 border-rose-300',
+	unmatched: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+const QC_TONE_CLASS: Record<'clean' | 'warning' | 'error' | 'empty', string> = {
+	clean: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+	warning: 'bg-amber-50/70 border-amber-300 text-amber-950',
+	error: 'bg-rose-50/70 border-rose-300 text-rose-950',
+	empty: 'bg-slate-50 border-slate-200 text-slate-800',
+};
+
+const initialQcTone = initialQc ? initialQc.status : 'empty';
+
+const initialStateJson = JSON.stringify({
+	tracks: initialTracks,
+	mode: INITIAL_OPTIONS.mode,
+	outputFormat: INITIAL_OPTIONS.outputFormat,
+	toleranceMs: INITIAL_OPTIONS.toleranceMs,
+	sequentialGapMs: INITIAL_OPTIONS.sequentialGapMs,
+	includeLabels: INITIAL_OPTIONS.includeLabels,
+	pristineSample: true,
+}).replace(/</g, '\\u003c');
+
+function countCues(content: string): number {
+	return (content.match(/-->/g) ?? []).length;
+}
+---
+
+<section
+	aria-label="Multi-track subtitle merge workbench"
+	data-merge-workbench
+	class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-w-0"
+>
+	<script type="application/json" data-merge-initial set:html={initialStateJson}></script>
+
+	<div class="border-b border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-4 sm:py-5 space-y-4 min-w-0">
+		<div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+			<div class="min-w-0">
+				<h2 class="text-base sm:text-lg font-bold text-slate-950">Merge Workbench</h2>
+				<p class="text-xs text-slate-600">
+					2 to 10 SRT or WebVTT tracks merged in local browser memory.
+				</p>
+			</div>
+			<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
+				<span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>
+				<span>Zero upload / No size cap</span>
+			</span>
+		</div>
+
+		<div class="grid grid-cols-1 lg:grid-cols-12 gap-3 min-w-0">
+			<div class="lg:col-span-8 min-w-0">
+				<div
+					data-merge-dropzone
+					class="rounded-xl border-2 border-dashed border-slate-300 bg-white p-3.5 sm:p-4 space-y-2.5 min-w-0 transition-colors"
+				>
+					<label
+						for="merge-file-upload"
+						class="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+					>
+						Drop subtitle files
+					</label>
+					<input
+						id="merge-file-upload"
+						type="file"
+						multiple
+						accept=".srt,.vtt,text/plain"
+						data-testid="merge-file-upload"
+						class="block w-full max-w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800"
+					/>
+					<p class="text-[11px] text-slate-500 leading-relaxed break-words">
+						Drop 2 to 10 .srt or .vtt files, or pick them here. Each file is read with
+						File.text() inside this tab and never uploaded.
+					</p>
+				</div>
+			</div>
+
+			<div class="lg:col-span-4 grid grid-cols-1 gap-2 min-w-0 content-start">
+				<button
+					type="button"
+					data-testid="merge-load-sample-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+				>
+					Load Bilingual Sample
+				</button>
+				<button
+					type="button"
+					data-testid="merge-add-track"
+					class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					+ Add Track
+				</button>
+				<p
+					data-testid="merge-track-count"
+					data-track-count={String(initialTracks.length)}
+					class="text-xs font-semibold text-slate-700 tabular-nums"
+				>
+					{initialTracks.length} of {MAX_MERGE_TRACKS} tracks
+				</p>
+			</div>
+		</div>
+
+		<p
+			data-testid="merge-validation"
+			role="status"
+			aria-live="polite"
+			class="hidden rounded-lg px-3 py-2 text-xs font-medium"
+		></p>
+	</div>
+
+	<div class="border-b border-slate-200 p-4 sm:p-6 space-y-3 min-w-0">
+		<div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+			<h3 class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Tracks ({MIN_MERGE_TRACKS} minimum, {MAX_MERGE_TRACKS} maximum)
+			</h3>
+			<span class="text-[11px] text-slate-500">
+				Track 1 anchors stacked mode; every track can carry a language or speaker label
+			</span>
+		</div>
+
+		<div
+			data-testid="merge-track-list"
+			data-merge-track-list
+			class="space-y-2.5 min-w-0"
+		>
+			{
+				initialTracks.map((track, index) => (
+					<article
+						class="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 space-y-3 min-w-0"
+						data-track-uid={track.uid}
+					>
+						<div class="flex flex-wrap items-start justify-between gap-2 min-w-0">
+							<div class="flex items-start gap-2 min-w-0">
+								<span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-900 font-mono text-[11px] font-bold text-sky-400">
+									{index + 1}
+								</span>
+								<div class="min-w-0">
+									<p class="text-sm font-semibold text-slate-950 break-all">{track.name}</p>
+									<p class="text-[11px] text-slate-500 tabular-nums">
+										{countCues(track.content)} cues / {track.content.length} chars
+									</p>
+								</div>
+							</div>
+							<div class="flex flex-wrap items-center gap-1.5">
+								<label class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+									<span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+										Label
+									</span>
+									<input
+										type="text"
+										data-testid="merge-track-label"
+										value={track.label}
+										maxlength="12"
+										placeholder="EN"
+										aria-label={`Language or speaker label for ${track.name}`}
+										autocomplete="off"
+										class="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-mono uppercase focus:border-sky-500 focus:outline-none"
+									/>
+								</label>
+								<button
+									type="button"
+									data-track-action="up"
+									data-testid="merge-track-move-up"
+									disabled={index === 0}
+									aria-label={`Move ${track.name} up`}
+									class="min-h-9 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+								>
+									Up
+								</button>
+								<button
+									type="button"
+									data-track-action="down"
+									data-testid="merge-track-move-down"
+									disabled={index === initialTracks.length - 1}
+									aria-label={`Move ${track.name} down`}
+									class="min-h-9 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+								>
+									Down
+								</button>
+								<button
+									type="button"
+									data-track-action="remove"
+									data-testid="merge-track-remove"
+									disabled={initialTracks.length <= MIN_MERGE_TRACKS}
+									aria-label={`Remove ${track.name}`}
+									class="min-h-9 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
+								>
+									Remove
+								</button>
+							</div>
+						</div>
+						<details open class="min-w-0">
+							<summary class="cursor-pointer select-none text-xs font-semibold text-sky-800">
+								Edit cue text and timings
+							</summary>
+							<textarea
+								data-testid="merge-track-content"
+								rows="8"
+								spellcheck="false"
+								autocomplete="off"
+								autocorrect="off"
+								autocapitalize="off"
+								placeholder="Paste SRT or WebVTT cues here..."
+								class="mt-2 w-full rounded-lg border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3 focus:border-sky-500 focus:outline-none resize-y"
+							>{track.content}</textarea>
+						</details>
+					</article>
+				))
+			}
+		</div>
+	</div>
+
+	<div class="border-b border-slate-200 p-4 sm:p-6 space-y-3 min-w-0">
+		<div class="grid grid-cols-1 xl:grid-cols-12 gap-3 min-w-0">
+			<fieldset class="xl:col-span-7 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 space-y-2 min-w-0">
+				<legend class="px-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Merge mode
+				</legend>
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+					{
+						MODE_OPTIONS.map((mode) => (
+							<label class="relative flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 hover:bg-slate-100 min-w-0">
+								<input
+									type="radio"
+									name="merge-mode"
+									value={mode.id}
+									data-testid={`merge-mode-${mode.id}`}
+									checked={mode.id === INITIAL_OPTIONS.mode}
+									class="mt-0.5 h-4 w-4 shrink-0 accent-sky-600"
+								/>
+								<span class="min-w-0">
+									<span class="block text-xs font-bold text-slate-950">{mode.label}</span>
+									<span class="block text-[11px] text-slate-600 leading-snug">{mode.detail}</span>
+								</span>
+							</label>
+						))
+					}
+				</div>
+			</fieldset>
+
+			<div class="xl:col-span-5 grid grid-cols-1 gap-2.5 min-w-0">
+				<div
+					data-mode-panel="stacked"
+					class={INITIAL_OPTIONS.mode === 'stacked' ? 'block min-w-0' : 'hidden min-w-0'}
+				>
+					<label
+						for="merge-tolerance-ms"
+						class="text-xs font-semibold text-slate-700"
+					>
+						Overlap tolerance (ms)
+					</label>
+					<input
+						id="merge-tolerance-ms"
+						type="number"
+						data-testid="merge-tolerance-ms"
+						min="0"
+						max="5000"
+						step="10"
+						value={String(INITIAL_OPTIONS.toleranceMs)}
+						class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono tabular-nums text-slate-900 focus:border-sky-500 focus:outline-none"
+					/>
+					<p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+						Secondary cues inside this window of the anchor track are stacked on the same cue.
+					</p>
+				</div>
+
+				<div
+					data-mode-panel="sequential"
+					class={INITIAL_OPTIONS.mode === 'sequential' ? 'block min-w-0' : 'hidden min-w-0'}
+				>
+					<label for="merge-gap-ms" class="text-xs font-semibold text-slate-700">
+						Sequential gap (ms)
+					</label>
+					<input
+						id="merge-gap-ms"
+						type="number"
+						data-testid="merge-gap-ms"
+						min="0"
+						max="10000"
+						step="50"
+						value={String(INITIAL_OPTIONS.sequentialGapMs)}
+						class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono tabular-nums text-slate-900 focus:border-sky-500 focus:outline-none"
+					/>
+					<p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+						Each track starts this many milliseconds after the previous track ends.
+					</p>
+				</div>
+
+				<div class="min-w-0">
+					<label for="merge-format-select" class="text-xs font-semibold text-slate-700">
+						Output format
+					</label>
+					<select
+						id="merge-format-select"
+						data-testid="merge-format-select"
+						class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none"
+					>
+						<option value="srt" selected={INITIAL_OPTIONS.outputFormat === 'srt'}>SRT (.srt)</option>
+						<option value="vtt" selected={INITIAL_OPTIONS.outputFormat === 'vtt'}>WebVTT (.vtt)</option>
+					</select>
+				</div>
+
+				<label class="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 cursor-pointer min-w-0">
+					<input
+						type="checkbox"
+						data-testid="merge-include-labels"
+						checked={INITIAL_OPTIONS.includeLabels}
+						class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-sky-600"
+					/>
+					<span class="min-w-0 text-xs text-slate-700">
+						<span class="block font-semibold text-slate-900">Prefix lines with track labels</span>
+						<span class="block text-slate-500 leading-relaxed">
+							Adds [EN], [ZH], or your own label before the first line of each cue.
+						</span>
+					</span>
+				</label>
+			</div>
+		</div>
+
+		<div
+			data-testid="merge-status-banner"
+			data-merge-status
+			data-status="ok"
+			role="status"
+			aria-live="polite"
+			class="rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border bg-emerald-50/80 border-emerald-200 text-emerald-950 min-w-0"
+		>
+			<span class="break-words">{initialStatusText}</span>
+			<span class="font-mono text-[11px] opacity-80">.{INITIAL_OPTIONS.outputFormat}</span>
+		</div>
+	</div>
+
+	<div class="border-b border-slate-200 min-w-0">
+		<div class="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-slate-200 min-w-0">
+			<h3 class="text-sm font-bold text-slate-900">Timeline Diff and Overlap Preview</h3>
+			<span data-merge-diff-caption class="text-xs text-slate-500 tabular-nums">
+				Showing {diffRows.length} of {initialDiff.length} merged cues
+			</span>
+		</div>
+
+		<div class="overflow-x-auto">
+			<table data-testid="merge-diff-preview" class="w-full text-left border-collapse text-xs">
+				<thead>
+					<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider">
+						<th scope="col" class="py-2.5 px-3 font-semibold">Cue #</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Time Range</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Source Tracks</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Status</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Drift / Overlap ms</th>
+						<th scope="col" class="py-2.5 px-3 font-semibold">Cue Lines</th>
+					</tr>
+				</thead>
+				<tbody data-merge-diff-body class="divide-y divide-slate-100 bg-white">
+					{
+						diffRows.map((item) => (
+							<tr class="align-top" data-cue-status={item.status}>
+								<td class="py-2 px-3 font-mono tabular-nums text-slate-500">{item.cueIndex}</td>
+								<td class="py-2 px-3 font-mono tabular-nums text-slate-700 whitespace-nowrap">
+									{formatTimestamp(item.startSec, INITIAL_OPTIONS.outputFormat)} -{' '}
+									{formatTimestamp(item.endSec, INITIAL_OPTIONS.outputFormat)}
+								</td>
+								<td class="py-2 px-3 text-slate-700 break-words">
+									{item.sourceTracks
+										.map((trackId) => initialSourceLabels.get(trackId) ?? trackId)
+										.join(', ')}
+								</td>
+								<td class="py-2 px-3">
+									<span
+										class:list={[
+											'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+											STATUS_BADGE_CLASS[item.status],
+										]}
+									>
+										{item.status}
+									</span>
+								</td>
+								<td class="py-2 px-3 font-mono tabular-nums text-slate-700 whitespace-nowrap">
+									{item.driftMs} / {item.overlapMs}
+								</td>
+								<td class="py-2 px-3 font-mono text-slate-900 space-y-0.5 break-words">
+									{item.lines.map((line) => <div>{line}</div>)}
+								</td>
+							</tr>
+						))
+					}
+					{
+						diffRows.length === 0 && (
+							<tr>
+								<td colspan="6" class="py-4 px-3 text-center text-slate-500">
+									No merged cues to preview.
+								</td>
+							</tr>
+						)
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="border-b border-slate-200 p-4 sm:p-6 space-y-2 min-w-0">
+		<div
+			data-testid="merge-qc-summary"
+			data-merge-qc-summary
+			data-qc-state={initialQcTone}
+			data-qc-errors={String(initialQc?.errorCount ?? 0)}
+			data-qc-warnings={String(initialQc?.warningCount ?? 0)}
+			class:list={[
+				'rounded-xl border p-3.5 space-y-2.5 min-w-0',
+				QC_TONE_CLASS[initialQcTone],
+			]}
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+				<div class="min-w-0">
+					<h3 class="text-sm font-bold">Timeline QC Summary</h3>
+					<p data-merge-qc-summary-text class="text-xs leading-relaxed break-words">
+						{initialQc ? initialQc.summary : 'Timeline QC is waiting for two valid tracks.'}
+					</p>
+				</div>
+				<button
+					type="button"
+					data-testid="merge-qc-download-btn"
+					disabled={!initialQc}
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					Download .qc.txt
+				</button>
+			</div>
+
+			<div data-merge-qc-metrics class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs min-w-0">
+				<div class="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 text-slate-900 min-w-0">
+					<span class="block text-[11px] opacity-80">Tracks merged</span>
+					<strong class="font-mono tabular-nums">{initialStats?.trackCount ?? 0}</strong>
+				</div>
+				<div class="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 text-slate-900 min-w-0">
+					<span class="block text-[11px] opacity-80">Output cues</span>
+					<strong class="font-mono tabular-nums">{initialStats?.outputCueCount ?? 0}</strong>
+				</div>
+				<div
+					class:list={[
+						'rounded-lg border px-2.5 py-2 min-w-0',
+						(initialStats?.driftCount ?? 0) > 0
+							? 'border-amber-300 bg-amber-50/70 text-amber-950'
+							: 'border-emerald-200 bg-emerald-50/60 text-emerald-950',
+					]}
+				>
+					<span class="block text-[11px] opacity-80">Aligned / Drift</span>
+					<strong class="font-mono tabular-nums">
+						{initialStats?.alignedCount ?? 0} / {initialStats?.driftCount ?? 0}
+					</strong>
+				</div>
+				<div class="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 text-slate-900 min-w-0">
+					<span class="block text-[11px] opacity-80">Overlap / Unmatched</span>
+					<strong class="font-mono tabular-nums">
+						{initialStats?.overlapCount ?? 0} / {initialStats?.unmatchedCount ?? 0}
+					</strong>
+				</div>
+			</div>
+
+			<ul data-merge-qc-issues class="space-y-1 text-xs leading-relaxed list-disc pl-4 min-w-0">
+				{
+					initialIssues.length === 0 ? (
+						<li class="list-none pl-0">
+							{initialQc ? 'No timeline QC issues detected.' : 'No merge output yet.'}
+						</li>
+					) : (
+						initialIssues.map((issue) => (
+							<li data-qc-code={issue.code} data-qc-scope={issue.scope} class="break-words">
+								[{issue.code}] {issue.message}
+							</li>
+						))
+					)
+				}
+			</ul>
+
+			<p data-merge-qc-more class="text-[11px] opacity-80 break-words">
+				{initialQc && initialQc.issues.length > initialIssues.length
+					? `Showing ${initialIssues.length} of ${initialQc.issues.length} issues. Download the QC report for the full list.`
+					: 'Overlaps and drift are reported, never silently repaired. Edit a track and the preview updates instantly.'}
+			</p>
+		</div>
+	</div>
+
+	<div class="p-4 sm:p-6 space-y-3 bg-slate-50/40 min-w-0">
+		<div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+			<label for="merge-output" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Merged Subtitle Output
+			</label>
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					data-testid="merge-copy-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Copy output
+				</button>
+				<button
+					type="button"
+					data-testid="merge-download-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Download .{INITIAL_OPTIONS.outputFormat}
+				</button>
+			</div>
+		</div>
+		<p
+			data-testid="merge-export-status"
+			role="status"
+			aria-live="polite"
+			class="hidden rounded-lg px-3 py-2 text-xs font-medium"
+		></p>
+		<textarea
+			id="merge-output"
+			data-testid="merge-output"
+			rows="16"
+			readonly
+			spellcheck="false"
+			autocomplete="off"
+			class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+		>{initialOutput}</textarea>
+		<p class="text-[11px] text-slate-500 leading-relaxed break-words">
+			Copy and download run entirely in this tab. GA4 receives only an anonymous subtitle_export
+			event with the export action and output format, never filenames or subtitle text.
+		</p>
+	</div>
+</section>
+
+<script>
+	import {
+		MAX_MERGE_TRACKS,
+		MIN_MERGE_TRACKS,
+		SAMPLE_BILINGUAL_TRACKS,
+		mergeSubtitleTracks,
+	} from '../lib/subtitle-merge';
+	import type {
+		MergeCueDiffItem,
+		MergeMode,
+		MergeSubtitlesOptions,
+		MergeSubtitlesResult,
+	} from '../lib/subtitle-merge';
+	import { formatTimestamp } from '../lib/subtitle-engine';
+	import { formatQcReport } from '../lib/timeline-qc';
+	import type { TimelineQcReport } from '../lib/timeline-qc';
+	import { trackToolEvent } from '../lib/analytics';
+
+	interface WorkbenchTrack {
+		uid: string;
+		name: string;
+		label: string;
+		content: string;
+	}
+
+	interface WorkbenchState {
+		tracks: WorkbenchTrack[];
+		mode: MergeMode;
+		outputFormat: 'srt' | 'vtt';
+		toleranceMs: number;
+		sequentialGapMs: number;
+		includeLabels: boolean;
+		pristineSample: boolean;
+	}
+
+	type MergeSuccess = Extract<MergeSubtitlesResult, { ok: true }>;
+	type MergeStats = MergeSuccess['stats'];
+
+	const MODE_LABELS: Record<MergeMode, string> = {
+		stacked: 'Stacked bilingual',
+		interleave: 'Time-sorted interleave',
+		sequential: 'Sequential append',
+	};
+
+	const STATUS_BADGE_CLASS: Record<MergeCueDiffItem['status'], string> = {
+		aligned: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+		drift: 'bg-amber-50 text-amber-900 border-amber-300',
+		overlap: 'bg-rose-50 text-rose-900 border-rose-300',
+		unmatched: 'bg-slate-100 text-slate-700 border-slate-300',
+	};
+
+	const QC_TONE_CLASS: Record<TimelineQcReport['status'] | 'empty', string> = {
+		clean: 'bg-emerald-50/60 border-emerald-200 text-emerald-950',
+		warning: 'bg-amber-50/70 border-amber-300 text-amber-950',
+		error: 'bg-rose-50/70 border-rose-300 text-rose-950',
+		empty: 'bg-slate-50 border-slate-200 text-slate-800',
+	};
+
+	const STATUS_SUCCESS_CLASS =
+		'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border bg-emerald-50/80 border-emerald-200 text-emerald-950 min-w-0';
+	const STATUS_ERROR_CLASS =
+		'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium flex flex-wrap items-center justify-between gap-2 border bg-rose-50 border-rose-200 text-rose-900 min-w-0';
+
+	let uidSeed = 0;
+
+	function nextUid(): string {
+		uidSeed += 1;
+		return `track-${uidSeed}`;
+	}
+
+	function createEl<K extends keyof HTMLElementTagNameMap>(
+		tag: K,
+		className?: string,
+		text?: string,
+	): HTMLElementTagNameMap[K] {
+		const node = document.createElement(tag);
+		if (className) node.className = className;
+		if (text !== undefined) node.textContent = text;
+		return node;
+	}
+
+	function countCues(content: string): number {
+		return (content.match(/-->/g) ?? []).length;
+	}
+
+	function cloneSampleTracks(): WorkbenchTrack[] {
+		return SAMPLE_BILINGUAL_TRACKS.map((track, index) => ({
+			uid: `sample-track-${index + 1}`,
+			name: track.name,
+			label: track.label ?? '',
+			content: track.content,
+		}));
+	}
+
+	function deriveLabel(fileName: string): string {
+		const base = fileName.replace(/\.(srt|vtt|txt)$/i, '');
+		const parts = base.split('.');
+		const suffix = parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
+		return /^[A-Za-z]{2,4}$/.test(suffix) ? suffix.toUpperCase() : '';
+	}
+
+	function createTrackButton(
+		action: string,
+		label: string,
+		testId: string,
+		disabled: boolean,
+		variant: 'neutral' | 'danger' = 'neutral',
+	): HTMLButtonElement {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.dataset.trackAction = action;
+		button.dataset.testid = testId;
+		button.disabled = disabled;
+		button.textContent = label;
+		button.className =
+			variant === 'danger'
+				? 'min-h-9 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed'
+				: 'min-h-9 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed';
+		return button;
+	}
+
+	function bindMergeWorkbench(root: HTMLElement): void {
+		const trackList = root.querySelector<HTMLElement>('[data-merge-track-list]');
+		const fileUpload = root.querySelector<HTMLInputElement>('[data-testid="merge-file-upload"]');
+		const dropzone = root.querySelector<HTMLElement>('[data-merge-dropzone]');
+		const trackCount = root.querySelector<HTMLElement>('[data-testid="merge-track-count"]');
+		const addTrackBtn = root.querySelector<HTMLButtonElement>('[data-testid="merge-add-track"]');
+		const loadSampleBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="merge-load-sample-btn"]',
+		);
+		const validation = root.querySelector<HTMLElement>('[data-testid="merge-validation"]');
+		const statusBanner = root.querySelector<HTMLElement>('[data-merge-status]');
+		const toleranceInput = root.querySelector<HTMLInputElement>(
+			'[data-testid="merge-tolerance-ms"]',
+		);
+		const gapInput = root.querySelector<HTMLInputElement>('[data-testid="merge-gap-ms"]');
+		const includeLabelsInput = root.querySelector<HTMLInputElement>(
+			'[data-testid="merge-include-labels"]',
+		);
+		const formatSelect = root.querySelector<HTMLSelectElement>(
+			'[data-testid="merge-format-select"]',
+		);
+		const modeInputs = Array.from(
+			root.querySelectorAll<HTMLInputElement>('input[name="merge-mode"]'),
+		);
+		const diffBody = root.querySelector<HTMLElement>('[data-merge-diff-body]');
+		const diffCaption = root.querySelector<HTMLElement>('[data-merge-diff-caption]');
+		const qcBox = root.querySelector<HTMLElement>('[data-merge-qc-summary]');
+		const qcSummaryText = root.querySelector<HTMLElement>('[data-merge-qc-summary-text]');
+		const qcMetrics = root.querySelector<HTMLElement>('[data-merge-qc-metrics]');
+		const qcIssues = root.querySelector<HTMLElement>('[data-merge-qc-issues]');
+		const qcMore = root.querySelector<HTMLElement>('[data-merge-qc-more]');
+		const qcDownloadBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="merge-qc-download-btn"]',
+		);
+		const output = root.querySelector<HTMLTextAreaElement>('[data-testid="merge-output"]');
+		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="merge-copy-btn"]');
+		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="merge-download-btn"]');
+		const exportStatus = root.querySelector<HTMLElement>('[data-testid="merge-export-status"]');
+
+		if (
+			!trackList ||
+			!fileUpload ||
+			!trackCount ||
+			!addTrackBtn ||
+			!loadSampleBtn ||
+			!validation ||
+			!statusBanner ||
+			!toleranceInput ||
+			!gapInput ||
+			!includeLabelsInput ||
+			!formatSelect ||
+			!diffBody ||
+			!diffCaption ||
+			!qcBox ||
+			!qcSummaryText ||
+			!qcMetrics ||
+			!qcIssues ||
+			!qcDownloadBtn ||
+			!output ||
+			!copyBtn ||
+			!downloadBtn ||
+			!exportStatus
+		) {
+			return;
+		}
+
+		let state: WorkbenchState = {
+			tracks: cloneSampleTracks(),
+			mode: 'stacked',
+			outputFormat: 'srt',
+			toleranceMs: 250,
+			sequentialGapMs: 500,
+			includeLabels: true,
+			pristineSample: true,
+		};
+
+		const initialScript = document.querySelector<HTMLScriptElement>('[data-merge-initial]');
+		if (initialScript?.textContent) {
+			try {
+				const parsed = JSON.parse(initialScript.textContent) as Partial<WorkbenchState>;
+				if (Array.isArray(parsed.tracks) && parsed.tracks.length > 0) {
+					state.tracks = parsed.tracks.map((track, index) => ({
+						uid:
+							typeof track.uid === 'string' && track.uid.length > 0
+								? track.uid
+								: `restored-track-${index + 1}`,
+						name: typeof track.name === 'string' ? track.name : `Track ${index + 1}`,
+						label: typeof track.label === 'string' ? track.label : '',
+						content: typeof track.content === 'string' ? track.content : '',
+					}));
+				}
+				if (
+					parsed.mode === 'stacked' ||
+					parsed.mode === 'interleave' ||
+					parsed.mode === 'sequential'
+				) {
+					state.mode = parsed.mode;
+				}
+				if (parsed.outputFormat === 'srt' || parsed.outputFormat === 'vtt') {
+					state.outputFormat = parsed.outputFormat;
+				}
+				if (typeof parsed.toleranceMs === 'number' && Number.isFinite(parsed.toleranceMs)) {
+					state.toleranceMs = parsed.toleranceMs;
+				}
+				if (
+					typeof parsed.sequentialGapMs === 'number' &&
+					Number.isFinite(parsed.sequentialGapMs)
+				) {
+					state.sequentialGapMs = parsed.sequentialGapMs;
+				}
+				if (typeof parsed.includeLabels === 'boolean') {
+					state.includeLabels = parsed.includeLabels;
+				}
+				if (typeof parsed.pristineSample === 'boolean') {
+					state.pristineSample = parsed.pristineSample;
+				}
+			} catch {
+				state.tracks = cloneSampleTracks();
+			}
+		}
+
+		let fullOutputText = output.value;
+		let activeQc: TimelineQcReport | null = null;
+		let mergeTimer: number | null = null;
+
+		const showValidation = (message: string, tone: 'warn' | 'ok' = 'warn'): void => {
+			validation.textContent = message;
+			validation.className =
+				tone === 'ok'
+					? 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950'
+					: 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950';
+		};
+
+		const setExportStatus = (message: string, risk: boolean): void => {
+			if (!message) {
+				exportStatus.textContent = '';
+				exportStatus.className = 'hidden rounded-lg px-3 py-2 text-xs font-medium';
+				return;
+			}
+			exportStatus.textContent = message;
+			exportStatus.className = risk
+				? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950'
+				: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950';
+		};
+
+		const syncModePanels = (): void => {
+			for (const panel of root.querySelectorAll<HTMLElement>('[data-mode-panel]')) {
+				const active = panel.dataset.modePanel === state.mode;
+				panel.classList.toggle('hidden', !active);
+			}
+		};
+
+		const syncControlsFromState = (): void => {
+			for (const input of modeInputs) {
+				input.checked = input.value === state.mode;
+			}
+			toleranceInput.value = String(state.toleranceMs);
+			gapInput.value = String(state.sequentialGapMs);
+			includeLabelsInput.checked = state.includeLabels;
+			formatSelect.value = state.outputFormat;
+			syncModePanels();
+		};
+
+		const updateTrackMeta = (): void => {
+			trackCount.textContent = `${state.tracks.length} of ${MAX_MERGE_TRACKS} tracks`;
+			trackCount.dataset.trackCount = String(state.tracks.length);
+			addTrackBtn.disabled = state.tracks.length >= MAX_MERGE_TRACKS;
+		};
+
+		const renderTrackList = (): void => {
+			const fragment = document.createDocumentFragment();
+
+			state.tracks.forEach((track, index) => {
+				const card = createEl(
+					'article',
+					'rounded-xl border border-slate-200 bg-white p-3 sm:p-4 space-y-3 min-w-0',
+				);
+				card.dataset.trackUid = track.uid;
+
+				const header = createEl('div', 'flex flex-wrap items-start justify-between gap-2 min-w-0');
+				const identity = createEl('div', 'flex items-start gap-2 min-w-0');
+				identity.append(
+					createEl(
+						'span',
+						'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-900 font-mono text-[11px] font-bold text-sky-400',
+						String(index + 1),
+					),
+				);
+
+				const nameWrap = createEl('div', 'min-w-0');
+				nameWrap.append(
+					createEl(
+						'p',
+						'text-sm font-semibold text-slate-950 break-all',
+						track.name || `Track ${index + 1}`,
+					),
+					createEl(
+						'p',
+						'text-[11px] text-slate-500 tabular-nums',
+						`${countCues(track.content)} cues / ${track.content.length} chars`,
+					),
+				);
+				identity.append(nameWrap);
+
+				const actions = createEl('div', 'flex flex-wrap items-center gap-1.5');
+				const labelWrap = createEl(
+					'label',
+					'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1',
+				);
+				labelWrap.append(
+					createEl(
+						'span',
+						'text-[10px] font-semibold uppercase tracking-wider text-slate-500',
+						'Label',
+					),
+				);
+				const labelInput = createEl(
+					'input',
+					'w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-mono uppercase focus:border-sky-500 focus:outline-none',
+				);
+				labelInput.type = 'text';
+				labelInput.value = track.label;
+				labelInput.maxLength = 12;
+				labelInput.placeholder = 'EN';
+				labelInput.autocomplete = 'off';
+				labelInput.dataset.testid = 'merge-track-label';
+				labelInput.setAttribute(
+					'aria-label',
+					`Language or speaker label for ${track.name || `track ${index + 1}`}`,
+				);
+				labelWrap.append(labelInput);
+
+				const upBtn = createTrackButton('up', 'Up', 'merge-track-move-up', index === 0);
+				upBtn.setAttribute('aria-label', 'Move track up');
+				const downBtn = createTrackButton(
+					'down',
+					'Down',
+					'merge-track-move-down',
+					index === state.tracks.length - 1,
+				);
+				downBtn.setAttribute('aria-label', 'Move track down');
+				const removeBtn = createTrackButton(
+					'remove',
+					'Remove',
+					'merge-track-remove',
+					state.tracks.length <= MIN_MERGE_TRACKS,
+					'danger',
+				);
+				removeBtn.setAttribute('aria-label', 'Remove track');
+				actions.append(labelWrap, upBtn, downBtn, removeBtn);
+				header.append(identity, actions);
+
+				const details = createEl('details', 'min-w-0');
+				details.open = true;
+				details.append(
+					createEl(
+						'summary',
+						'cursor-pointer select-none text-xs font-semibold text-sky-800',
+						'Edit cue text and timings',
+					),
+				);
+				const textarea = createEl(
+					'textarea',
+					'mt-2 w-full rounded-lg border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3 focus:border-sky-500 focus:outline-none resize-y',
+				);
+				textarea.rows = 8;
+				textarea.spellcheck = false;
+				textarea.autocomplete = 'off';
+				textarea.placeholder = 'Paste SRT or WebVTT cues here...';
+				textarea.dataset.testid = 'merge-track-content';
+				textarea.value = track.content;
+				details.append(textarea);
+
+				card.append(header, details);
+				fragment.append(card);
+			});
+
+			trackList.replaceChildren(fragment);
+			updateTrackMeta();
+		};
+
+		const renderDiff = (items: MergeCueDiffItem[], format: 'srt' | 'vtt'): void => {
+			const rows = items.slice(0, 50);
+			diffCaption.textContent = `Showing ${rows.length} of ${items.length} merged cues`;
+			diffBody.replaceChildren();
+
+			if (rows.length === 0) {
+				const emptyRow = createEl('tr');
+				const cell = createEl('td', 'py-4 px-3 text-center text-slate-500', 'No merged cues to preview.');
+				cell.colSpan = 6;
+				emptyRow.append(cell);
+				diffBody.append(emptyRow);
+				return;
+			}
+
+			const labelByUid = new Map(
+				state.tracks.map((track, index) => [
+					track.uid,
+					track.label.trim() || track.name.trim() || `Track ${index + 1}`,
+				]),
+			);
+			const fragment = document.createDocumentFragment();
+
+			for (const item of rows) {
+				const row = createEl('tr', 'align-top');
+				row.dataset.cueStatus = item.status;
+
+				const statusCell = createEl('td', 'py-2 px-3');
+				statusCell.append(
+					createEl(
+						'span',
+						`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[item.status]}`,
+						item.status,
+					),
+				);
+
+				const linesCell = createEl('td', 'py-2 px-3 font-mono text-slate-900 space-y-0.5 break-words');
+				for (const line of item.lines) {
+					linesCell.append(createEl('div', '', line));
+				}
+
+				row.append(
+					createEl('td', 'py-2 px-3 font-mono tabular-nums text-slate-500', String(item.cueIndex)),
+					createEl(
+						'td',
+						'py-2 px-3 font-mono tabular-nums text-slate-700 whitespace-nowrap',
+						`${formatTimestamp(item.startSec, format)} - ${formatTimestamp(item.endSec, format)}`,
+					),
+					createEl(
+						'td',
+						'py-2 px-3 text-slate-700 break-words',
+						item.sourceTracks.map((id) => labelByUid.get(id) ?? id).join(', '),
+					),
+					statusCell,
+					createEl(
+						'td',
+						'py-2 px-3 font-mono tabular-nums text-slate-700 whitespace-nowrap',
+						`${item.driftMs} / ${item.overlapMs}`,
+					),
+					linesCell,
+				);
+				fragment.append(row);
+			}
+
+			diffBody.append(fragment);
+		};
+
+		const buildMetric = (
+			label: string,
+			value: string,
+			tone: 'neutral' | 'ok' | 'warn' = 'neutral',
+		): HTMLDivElement => {
+			const cell = createEl(
+				'div',
+				tone === 'warn'
+					? 'rounded-lg border border-amber-300 bg-amber-50/70 px-2.5 py-2 text-amber-950 min-w-0'
+					: tone === 'ok'
+						? 'rounded-lg border border-emerald-200 bg-emerald-50/60 px-2.5 py-2 text-emerald-950 min-w-0'
+						: 'rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 text-slate-900 min-w-0',
+			);
+			cell.append(
+				createEl('span', 'block text-[11px] opacity-80', label),
+				createEl('strong', 'font-mono tabular-nums', value),
+			);
+			return cell;
+		};
+
+		const renderQc = (report: TimelineQcReport | null, stats: MergeStats | null): void => {
+			const tone = report ? report.status : 'empty';
+			qcBox.dataset.qcState = tone;
+			qcBox.dataset.qcErrors = String(report?.errorCount ?? 0);
+			qcBox.dataset.qcWarnings = String(report?.warningCount ?? 0);
+			qcBox.className = `rounded-xl border p-3.5 space-y-2.5 min-w-0 ${QC_TONE_CLASS[tone]}`;
+			qcSummaryText.textContent = report
+				? report.summary
+				: 'Timeline QC is waiting for two valid tracks.';
+			qcDownloadBtn.disabled = !report;
+
+			const metricFragment = document.createDocumentFragment();
+			metricFragment.append(
+				buildMetric('Tracks merged', String(stats?.trackCount ?? 0)),
+				buildMetric('Output cues', String(stats?.outputCueCount ?? 0)),
+				buildMetric(
+					'Aligned / Drift',
+					`${stats?.alignedCount ?? 0} / ${stats?.driftCount ?? 0}`,
+					(stats?.driftCount ?? 0) > 0 ? 'warn' : 'ok',
+				),
+				buildMetric(
+					'Overlap / Unmatched',
+					`${stats?.overlapCount ?? 0} / ${stats?.unmatchedCount ?? 0}`,
+					(stats?.overlapCount ?? 0) > 0 ? 'warn' : 'neutral',
+				),
+			);
+			qcMetrics.replaceChildren(metricFragment);
+
+			const issues = report ? report.issues.slice(0, 25) : [];
+			if (issues.length === 0) {
+				qcIssues.replaceChildren(
+					createEl(
+						'li',
+						'list-none pl-0',
+						report ? 'No timeline QC issues detected.' : 'No merge output yet.',
+					),
+				);
+			} else {
+				const issueFragment = document.createDocumentFragment();
+				for (const issue of issues) {
+					const item = createEl('li', 'break-words', `[${issue.code}] ${issue.message}`);
+					item.dataset.qcCode = issue.code;
+					item.dataset.qcScope = issue.scope;
+					issueFragment.append(item);
+				}
+				qcIssues.replaceChildren(issueFragment);
+			}
+
+			if (qcMore) {
+				qcMore.textContent =
+					report && report.issues.length > 25
+						? `Showing 25 of ${report.issues.length} issues. Download the QC report for the full list.`
+						: 'Overlaps and drift are reported, never silently repaired. Edit a track and the preview updates instantly.';
+			}
+		};
+
+		const clearOutput = (): void => {
+			fullOutputText = '';
+			activeQc = null;
+			output.value = '';
+			copyBtn.disabled = true;
+			downloadBtn.disabled = true;
+			downloadBtn.textContent = 'Download merged file';
+			setExportStatus('', false);
+		};
+
+		const renderFailure = (message: string): void => {
+			statusBanner.dataset.status = 'error';
+			statusBanner.className = STATUS_ERROR_CLASS;
+			statusBanner.replaceChildren(createEl('span', 'break-words', message));
+			clearOutput();
+			renderDiff([], state.outputFormat);
+			renderQc(null, null);
+		};
+
+		const renderSuccess = (result: MergeSuccess, options: MergeSubtitlesOptions): void => {
+			statusBanner.dataset.status = 'ok';
+			statusBanner.className = STATUS_SUCCESS_CLASS;
+			const summary = `${result.stats.trackCount} of ${state.tracks.length} tracks merged into ${result.stats.outputCueCount} cues (${MODE_LABELS[options.mode]}). ${result.stats.alignedCount} aligned, ${result.stats.driftCount} drift, ${result.stats.overlapCount} overlap, ${result.stats.unmatchedCount} unmatched.`;
+			statusBanner.replaceChildren(
+				createEl('span', 'break-words', summary),
+				createEl('span', 'font-mono text-[11px] opacity-80', `.${options.outputFormat}`),
+			);
+			fullOutputText = result.output;
+			activeQc = result.qc;
+			output.value = result.output;
+			copyBtn.disabled = result.output.length === 0;
+			downloadBtn.disabled = result.output.length === 0;
+			downloadBtn.textContent = `Download .${options.outputFormat}`;
+			setExportStatus('', false);
+			renderDiff(result.diffPreview, options.outputFormat);
+			renderQc(result.qc, result.stats);
+		};
+
+		const runMerge = (): void => {
+			const options: MergeSubtitlesOptions = {
+				mode: state.mode,
+				outputFormat: state.outputFormat,
+				toleranceMs: state.toleranceMs,
+				sequentialGapMs: state.sequentialGapMs,
+				includeLabels: state.includeLabels,
+			};
+			const activeTracks = state.tracks.filter((track) => track.content.trim().length > 0);
+
+			if (state.tracks.length < MIN_MERGE_TRACKS) {
+				renderFailure(
+					`Merge needs at least ${MIN_MERGE_TRACKS} tracks. Add another file or use the Add Track button.`,
+				);
+				return;
+			}
+			if (activeTracks.length < MIN_MERGE_TRACKS) {
+				renderFailure(
+					'Merge needs at least two tracks with cue text. Add another file, paste cues into an empty track, or load the bilingual sample.',
+				);
+				return;
+			}
+
+			const result = mergeSubtitleTracks(
+				activeTracks.map((track, index) => ({
+					id: track.uid,
+					name: track.name.trim() || `Track ${index + 1}`,
+					label: track.label.trim(),
+					content: track.content,
+				})),
+				options,
+			);
+
+			if (!result.ok) {
+				renderFailure(`Merge error: ${result.error}`);
+				return;
+			}
+
+			renderSuccess(result, options);
+		};
+
+		const scheduleMerge = (): void => {
+			if (mergeTimer !== null) {
+				window.clearTimeout(mergeTimer);
+			}
+			mergeTimer = window.setTimeout(() => {
+				mergeTimer = null;
+				runMerge();
+			}, 250);
+		};
+
+		const announceExport = (action: 'copy' | 'download', format: 'srt' | 'vtt'): void => {
+			if (!activeQc) return;
+			const verb = action === 'copy' ? 'Copied' : 'Downloaded';
+			if (activeQc.status === 'clean') {
+				setExportStatus(
+					`${verb} merged .${format} with ${activeQc.emittedCues} cues. Timeline QC: clean.`,
+					false,
+				);
+				return;
+			}
+			setExportStatus(
+				`${verb} merged .${format} with timeline QC ${activeQc.status}: ${activeQc.errorCount} error(s), ${activeQc.warningCount} warning(s). Review the QC panel before publishing.`,
+				true,
+			);
+		};
+
+		async function ingestFiles(fileList: FileList | File[]): Promise<void> {
+			const files = Array.from(fileList);
+			if (files.length === 0) return;
+
+			const accepted = files.filter(
+				(file) =>
+					/\.(srt|vtt|txt)$/i.test(file.name) ||
+					(file.type.length > 0 && file.type.startsWith('text/')),
+			);
+			const ignoredByType = files.length - accepted.length;
+
+			if (accepted.length === 0) {
+				showValidation(
+					'Only .srt and .vtt subtitle text files are supported. Drop SRT or WebVTT files, or paste cue text into a track card.',
+				);
+				return;
+			}
+
+			const replacing = state.pristineSample;
+			const capacity = replacing ? MAX_MERGE_TRACKS : MAX_MERGE_TRACKS - state.tracks.length;
+
+			if (capacity <= 0) {
+				showValidation(
+					`Merge supports up to ${MAX_MERGE_TRACKS} tracks. Remove a track before adding more files.`,
+				);
+				return;
+			}
+
+			const selected = accepted.slice(0, capacity);
+			const skippedByLimit = accepted.length - selected.length;
+			const loadedTracks: WorkbenchTrack[] = [];
+			let unreadable = 0;
+
+			for (const file of selected) {
+				try {
+					const text = await file.text();
+					if (!text.trim()) {
+						unreadable += 1;
+						continue;
+					}
+					loadedTracks.push({
+						uid: nextUid(),
+						name: file.name,
+						label: deriveLabel(file.name),
+						content: text,
+					});
+				} catch {
+					unreadable += 1;
+				}
+			}
+
+			if (loadedTracks.length === 0) {
+				showValidation('The selected files were empty or unreadable. Choose SRT or WebVTT text files.');
+				return;
+			}
+
+			state.tracks = replacing ? loadedTracks : [...state.tracks, ...loadedTracks];
+			state.pristineSample = false;
+			renderTrackList();
+			runMerge();
+
+			const parts = [
+				`${replacing ? 'Replaced the sample with' : 'Added'} ${loadedTracks.length} track(s) from local files.`,
+			];
+			if (replacing && loadedTracks.length < MIN_MERGE_TRACKS) {
+				parts.push(`Add one more file to reach the ${MIN_MERGE_TRACKS} track minimum.`);
+			}
+			if (skippedByLimit > 0) {
+				parts.push(
+					`${skippedByLimit} file(s) were skipped because ${MAX_MERGE_TRACKS} tracks is the merge limit.`,
+				);
+			}
+			if (ignoredByType > 0) {
+				parts.push(`${ignoredByType} non-text file(s) were ignored.`);
+			}
+			if (unreadable > 0) {
+				parts.push(`${unreadable} file(s) had no readable text.`);
+			}
+			showValidation(parts.join(' '), 'ok');
+		}
+
+		trackList.addEventListener('click', (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			const actionButton = target.closest<HTMLElement>('[data-track-action]');
+			if (!actionButton) return;
+			const card = actionButton.closest<HTMLElement>('[data-track-uid]');
+			const uid = card?.dataset.trackUid;
+			if (!uid) return;
+			const index = state.tracks.findIndex((track) => track.uid === uid);
+			if (index < 0) return;
+			const action = actionButton.dataset.trackAction;
+
+			if (action === 'remove') {
+				if (state.tracks.length <= MIN_MERGE_TRACKS) {
+					showValidation(
+						`At least ${MIN_MERGE_TRACKS} tracks are required. Remove is disabled while two tracks remain.`,
+					);
+					return;
+				}
+				state.tracks.splice(index, 1);
+				state.pristineSample = false;
+				renderTrackList();
+				runMerge();
+				return;
+			}
+
+			if (action === 'up' && index > 0) {
+				const moved = state.tracks.splice(index, 1)[0];
+				if (!moved) return;
+				state.tracks.splice(index - 1, 0, moved);
+				state.pristineSample = false;
+				renderTrackList();
+				runMerge();
+				return;
+			}
+
+			if (action === 'down' && index < state.tracks.length - 1) {
+				const moved = state.tracks.splice(index, 1)[0];
+				if (!moved) return;
+				state.tracks.splice(index + 1, 0, moved);
+				state.pristineSample = false;
+				renderTrackList();
+				runMerge();
+			}
+		});
+
+		trackList.addEventListener('input', (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const card = target.closest<HTMLElement>('[data-track-uid]');
+			const uid = card?.dataset.trackUid;
+			if (!uid) return;
+			const track = state.tracks.find((item) => item.uid === uid);
+			if (!track) return;
+
+			if (target.matches('[data-testid="merge-track-label"]')) {
+				track.label = (target as HTMLInputElement).value;
+				state.pristineSample = false;
+				scheduleMerge();
+			} else if (target.matches('[data-testid="merge-track-content"]')) {
+				track.content = (target as HTMLTextAreaElement).value;
+				state.pristineSample = false;
+				scheduleMerge();
+			}
+		});
+
+		for (const input of modeInputs) {
+			input.addEventListener('change', () => {
+				if (!input.checked) return;
+				state.mode = input.value as MergeMode;
+				syncModePanels();
+				runMerge();
+			});
+		}
+
+		const readNumber = (
+			input: HTMLInputElement,
+			fallback: number,
+			min: number,
+			max: number,
+		): number => {
+			const parsed = Number(input.value);
+			if (!Number.isFinite(parsed)) return fallback;
+			return Math.min(max, Math.max(min, parsed));
+		};
+
+		toleranceInput.addEventListener('input', () => {
+			state.toleranceMs = readNumber(toleranceInput, state.toleranceMs, 0, 5000);
+			scheduleMerge();
+		});
+		toleranceInput.addEventListener('blur', () => {
+			state.toleranceMs = readNumber(toleranceInput, state.toleranceMs, 0, 5000);
+			toleranceInput.value = String(Math.round(state.toleranceMs));
+			runMerge();
+		});
+
+		gapInput.addEventListener('input', () => {
+			state.sequentialGapMs = readNumber(gapInput, state.sequentialGapMs, 0, 10000);
+			scheduleMerge();
+		});
+		gapInput.addEventListener('blur', () => {
+			state.sequentialGapMs = readNumber(gapInput, state.sequentialGapMs, 0, 10000);
+			gapInput.value = String(Math.round(state.sequentialGapMs));
+			runMerge();
+		});
+
+		includeLabelsInput.addEventListener('change', () => {
+			state.includeLabels = includeLabelsInput.checked;
+			runMerge();
+		});
+
+		formatSelect.addEventListener('change', () => {
+			state.outputFormat = formatSelect.value === 'vtt' ? 'vtt' : 'srt';
+			runMerge();
+		});
+
+		loadSampleBtn.addEventListener('click', () => {
+			state.tracks = cloneSampleTracks();
+			state.pristineSample = true;
+			renderTrackList();
+			runMerge();
+			showValidation('Loaded the bilingual EN and ZH sample tracks.', 'ok');
+		});
+
+		addTrackBtn.addEventListener('click', () => {
+			if (state.tracks.length >= MAX_MERGE_TRACKS) {
+				showValidation(
+					`Merge supports up to ${MAX_MERGE_TRACKS} tracks. Remove a track before adding another.`,
+				);
+				return;
+			}
+			state.tracks.push({
+				uid: nextUid(),
+				name: `Track ${state.tracks.length + 1}`,
+				label: '',
+				content: '',
+			});
+			state.pristineSample = false;
+			renderTrackList();
+			runMerge();
+			showValidation('Added an empty track. Paste SRT or WebVTT cues into it to include it in the merge.');
+		});
+
+		if (dropzone) {
+			const setDragActive = (active: boolean): void => {
+				dropzone.style.borderColor = active ? '#0284c7' : '';
+				dropzone.style.backgroundColor = active ? '#f0f9ff' : '';
+			};
+
+			dropzone.addEventListener('dragenter', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				setDragActive(true);
+			});
+			dropzone.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = 'copy';
+				}
+				setDragActive(true);
+			});
+			dropzone.addEventListener('dragleave', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				const related = event.relatedTarget as Node | null;
+				if (!related || !dropzone.contains(related)) {
+					setDragActive(false);
+				}
+			});
+			dropzone.addEventListener('drop', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				setDragActive(false);
+				const files = event.dataTransfer?.files;
+				if (files && files.length > 0) {
+					void ingestFiles(files);
+				}
+			});
+		}
+
+		fileUpload.addEventListener('change', () => {
+			if (fileUpload.files && fileUpload.files.length > 0) {
+				const files = Array.from(fileUpload.files);
+				fileUpload.value = '';
+				void ingestFiles(files);
+			}
+		});
+
+		copyBtn.addEventListener('click', async () => {
+			if (!fullOutputText) return;
+			const format = state.outputFormat;
+			try {
+				await navigator.clipboard.writeText(fullOutputText);
+			} catch {
+				output.focus();
+				output.select();
+				document.execCommand('copy');
+			}
+			trackToolEvent('subtitle_export', { export_action: 'copy', output_format: format });
+			announceExport('copy', format);
+			const originalLabel = copyBtn.textContent;
+			copyBtn.textContent = 'Copied';
+			window.setTimeout(() => {
+				copyBtn.textContent = originalLabel;
+			}, 1400);
+		});
+
+		downloadBtn.addEventListener('click', () => {
+			if (!fullOutputText) return;
+			const format = state.outputFormat;
+			const mime = format === 'vtt' ? 'text/vtt;charset=utf-8' : 'application/x-subrip;charset=utf-8';
+			const blob = new Blob([fullOutputText], { type: mime });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = `merged-subtitles.${format}`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', { export_action: 'download', output_format: format });
+			announceExport('download', format);
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		qcDownloadBtn.addEventListener('click', () => {
+			if (!activeQc) return;
+			const reportText = formatQcReport(activeQc);
+			const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = 'merged-timeline-qc.txt';
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+			setExportStatus(
+				`Downloaded QC report with ${activeQc.issues.length} issue(s).`,
+				activeQc.status !== 'clean',
+			);
+		});
+
+		syncControlsFromState();
+		renderTrackList();
+		runMerge();
+	}
+
+	document.querySelectorAll<HTMLElement>('[data-merge-workbench]').forEach(bindMergeWorkbench);
+</script>

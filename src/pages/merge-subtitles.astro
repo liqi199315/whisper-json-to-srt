@@ -1,0 +1,381 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MergeWorkbench from '../components/MergeWorkbench.astro';
+import type { RouteFaqItem } from '../lib/types';
+
+const faqs: RouteFaqItem[] = [
+	{
+		question: 'How many subtitle files can I merge at once?',
+		answer:
+			'The merge workbench accepts 2 to 10 subtitle tracks in a single pass. Each track can be an .srt or .vtt file, and you can also paste cue text directly into a track card. Parsing, sorting, and export all run in your browser, so there is no file size cap, no paid queue, and no upload step.',
+	},
+	{
+		question: 'What is the difference between stacked, interleave, and sequential merge modes?',
+		answer:
+			'Stacked mode keeps the first track as the timing anchor and adds matched cues from the other tracks as extra lines inside the same cue, which is the standard bilingual subtitle layout. Interleave mode sorts every cue from every track by start time into one chronological file. Sequential mode appends whole tracks end to end with a configurable gap, which fits multi-part episodes or separate speaker takes.',
+	},
+	{
+		question: 'How do I merge two subtitle languages that have slightly different timing?',
+		answer:
+			'Load both tracks, keep Stacked mode, and set the overlap tolerance to the timing difference you can accept, for example 250 ms. Secondary cues are matched to anchor cues whose ranges overlap inside that window. The diff table marks each merged cue as aligned, drift, overlap, or unmatched and reports the exact millisecond gap, so you can edit text or timing in the track editor before exporting.',
+	},
+	{
+		question: 'Are my subtitle files uploaded to a server when I merge them?',
+		answer:
+			'No. Every file is read with the browser File.text() API and merged in local memory. The page sends no subtitle content anywhere, stores no copy on a server, and keeps working offline once loaded. GA4 receives only an anonymous subtitle_export event with the export action and output format when you copy or download a merged file.',
+	},
+	{
+		question: 'Can I merge tracks with different start times or long silent gaps?',
+		answer:
+			'Yes. Stacked and Interleave modes preserve original cue timing and report mismatches instead of moving cues. Sequential mode is the tool for different start times: it shifts each track so its first cue begins after the previous track ends plus the gap you set. The Timeline QC panel and the downloadable .qc.txt report list overlaps, drift, and empty cues before you publish.',
+	},
+];
+
+const relatedTools = [
+	{
+		href: '/',
+		title: 'JSON to SRT Converter',
+		detail: 'Convert Whisper, WhisperX, whisper.cpp, Deepgram, and AssemblyAI JSON into subtitle files in the browser.',
+	},
+	{
+		href: '/fix-subtitle-encoding/',
+		title: 'Subtitle Encoding Fixer',
+		detail: 'Repair mojibake and broken character sets before you merge tracks from different machines.',
+	},
+	{
+		href: '/srt-to-json/',
+		title: 'SRT to JSON Converter',
+		detail: 'Turn merged subtitles back into structured JSON for automated dubbing or review pipelines.',
+	},
+	{
+		href: '/ttml-to-srt/',
+		title: 'TTML to SRT Converter',
+		detail: 'Normalize broadcast TTML captions into SRT before stacking them with a translation track.',
+	},
+	{
+		href: '/smi-to-srt/',
+		title: 'SMI to SRT Converter',
+		detail: 'Bring legacy SAMI subtitle files into the same merge workbench as modern SRT and VTT tracks.',
+	},
+	{
+		href: '/short-video-caption-splitter/',
+		title: 'Short Video Caption Splitter',
+		detail: 'Rewrap merged cues to a 16-character single-line limit for Reels, Shorts, and TikTok.',
+	},
+];
+
+const initialSampleActions = '2 to 10 tracks';
+---
+
+<BaseLayout
+	title="Merge SRT and VTT Subtitles Online | Dual-Language Subtitle Merger"
+	description="Merge 2 to 10 SRT or VTT subtitle tracks in your browser. Stack bilingual subtitles, interleave cues by time, or append tracks sequentially with drift and overlap QC. Zero upload and no file size cap."
+	canonicalPath="/merge-subtitles/"
+	faqs={faqs}
+>
+	<div class="space-y-6 sm:space-y-8 min-w-0">
+		<section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0">
+			<div class="lg:col-span-7 space-y-3 min-w-0">
+				<div class="inline-flex flex-wrap items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-medium text-sky-900">
+					<span>{initialSampleActions}</span>
+					<span class="text-sky-400">/</span>
+					<span>Stacked, Interleave, Sequential</span>
+					<span class="text-sky-400">/</span>
+					<span>Zero upload</span>
+				</div>
+				<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950 break-words">
+					Merge Dual &amp; Multi-Track Subtitles Online (Up to 10 SRT/VTT Files)
+				</h1>
+				<p class="text-sm sm:text-base text-slate-600 leading-relaxed break-words">
+					Combine a language track and a translation track, stack three or more speaker files,
+					or append a multi-part series into one timeline. The merge engine reads SRT and WebVTT
+					inside your browser tab, aligns cues by time, and reports drift and overlap before you
+					export a clean .srt or .vtt file.
+				</p>
+				<p class="text-xs sm:text-sm text-slate-500 leading-relaxed break-words">
+					Bilingual subtitles, multi-language releases, Q and A sessions with per-speaker
+					tracks, and long interviews split across files are all handled locally. Nothing is
+					uploaded and no track count is sold back to you behind a paywall.
+				</p>
+			</div>
+
+			<aside
+				aria-label="Merge technical specification"
+				class="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3 min-w-0"
+			>
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+					<h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+						Technical Summary
+					</h2>
+					<span class="font-mono text-xs text-slate-500">/merge-subtitles/</span>
+				</div>
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs min-w-0">
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Track count</dt>
+						<dd class="text-slate-600 mt-0.5">
+							2 to 10 SRT or WebVTT tracks per merge, with file drop, file picker, paste, or
+							sample input.
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Merge modes</dt>
+						<dd class="text-slate-600 mt-0.5">
+							Stacked bilingual, time-sorted interleave, and sequential append with a custom
+							gap.
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Execution and privacy</dt>
+						<dd class="text-slate-600 mt-0.5">
+							File.text() parsing and merging in local browser RAM; zero external requests for
+							subtitle content.
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">File size ceiling</dt>
+						<dd class="text-slate-600 mt-0.5">
+							No artificial cap and no upload queue, so feature-length tracks merge as easily as
+							short clips.
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Timing controls</dt>
+						<dd class="text-slate-600 mt-0.5 font-mono">
+							Tolerance 0 to 5000 ms, sequential gap 0 to 10000 ms
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">QC and export</dt>
+						<dd class="text-slate-600 mt-0.5">
+							Per-cue diff table, .qc.txt report, UTF-8 Blob download as .srt or .vtt.
+						</dd>
+					</div>
+				</dl>
+			</aside>
+		</section>
+
+		<MergeWorkbench />
+
+		<section
+			aria-labelledby="bilingual-workflow-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1 min-w-0">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Workflow
+				</p>
+				<h2 id="bilingual-workflow-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Bilingual stacked subtitles workflow
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				A bilingual subtitle file shows the source language on the first line and the
+				translation on the second line of the same cue. That layout only works when both
+				tracks share one cue grid, which is exactly what stacked mode produces.
+			</p>
+			<ol class="space-y-3 text-sm text-slate-700 leading-relaxed list-decimal pl-5">
+				<li>
+					<strong class="text-slate-950">Load the anchor track first.</strong> Drop the original
+					language file, or keep it as Track 1. Its cue boundaries define the merged timeline,
+					so pick the track that already matches the final audio edit.
+				</li>
+				<li>
+					<strong class="text-slate-950">Add the translation track.</strong> Drop the second
+					file, paste it into a new track card, or use Load Bilingual Sample to see the EN and
+					ZH pattern with realistic drift.
+				</li>
+				<li>
+					<strong class="text-slate-950">Label each track.</strong> Type EN, ZH, ES, or a speaker
+					name in the label field. With label prefixes enabled, the first line of each merged
+					cue carries [EN] or [ZH] so viewers can tell languages apart.
+				</li>
+				<li>
+					<strong class="text-slate-950">Tune the overlap tolerance.</strong> Start at 250 ms.
+					Raise it when translated cues start slightly later than the source, and lower it when
+					unrelated cues are being stacked together.
+				</li>
+				<li>
+					<strong class="text-slate-950">Review the diff table, then export.</strong> The table
+					shows each merged cue with its source tracks, status badge, drift, and overlap. Copy
+					the output or download a UTF-8 .srt or .vtt file.
+				</li>
+			</ol>
+			<div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 space-y-1.5 min-w-0">
+				<h3 class="text-sm font-semibold text-slate-950">Three or more languages</h3>
+				<p class="text-xs sm:text-sm text-slate-700 leading-relaxed break-words">
+					Stacked mode is not limited to two tracks. Add a third, fourth, or tenth track and
+					every secondary cue that matches the anchor within tolerance becomes another line in
+					the same cue. This is useful for trilingual releases and for interviews where each
+					language was transcribed separately. If a three-line cue feels crowded, split the
+					export later with the short video caption splitter or keep a second project for the
+					third language.
+				</p>
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="cloud-limits-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1 min-w-0">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Limits
+				</p>
+				<h2 id="cloud-limits-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Why 2-file cloud limits break multi-part workflows
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				Most free subtitle mergers accept exactly two files. Real production work rarely stops
+				at two: a documentary may ship in three languages, a podcast season may arrive as ten
+				episode files, and a conference recording may split speakers into separate tracks. A
+				two-file ceiling forces repeated merge passes, and each pass becomes a new chance to
+				lose a cue or shift a timestamp.
+			</p>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2 min-w-0">
+					<h3 class="text-sm font-semibold text-slate-950">Typical 2-file cloud merger</h3>
+					<ul class="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 leading-relaxed">
+						<li>Rejects a third file or silently replaces the second track.</li>
+						<li>Uploads every subtitle file to a remote queue before merging.</li>
+						<li>Meters file size and daily merges behind a paid plan.</li>
+						<li>Returns one merged file with no visibility into timing mismatches.</li>
+					</ul>
+				</div>
+				<div class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2 min-w-0">
+					<h3 class="text-sm font-semibold text-slate-950">This 10-track browser workbench</h3>
+					<ul class="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-700 leading-relaxed">
+						<li>Accepts 2 to 10 tracks in one pass with per-track labels and ordering.</li>
+						<li>Reads files locally, so subtitle text never leaves the tab.</li>
+						<li>Has no file size cap and no daily merge quota.</li>
+						<li>Shows a per-cue diff table and a downloadable QC report before export.</li>
+					</ul>
+				</div>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				For a ten-episode season, switch to Sequential mode and load all episode files at once.
+				Each episode starts after the previous one ends plus the gap you set, which produces a
+				single review file for a client or a single caption track for a playlist. When the
+				episodes belong to separate deliverables, merge them in smaller batches and keep the
+				per-batch QC reports together.
+			</p>
+		</section>
+
+		<section
+			aria-labelledby="timing-drift-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1 min-w-0">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Timing
+				</p>
+				<h2 id="timing-drift-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Handling timing drift and overlaps
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				Two subtitle files for the same video almost never share identical timestamps.
+				Translation cues start later, a re-edit trims a pause, or a separate transcription run
+				rounds to a different frame. Drift is normal. The problem starts when a merger hides it.
+			</p>
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-semibold text-slate-950">Overlap tolerance</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						In stacked mode, a secondary cue is matched to an anchor cue when their ranges
+						overlap within the tolerance window. The default 250 ms absorbs normal translation
+						lag without stacking unrelated lines.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-semibold text-slate-950">Drift threshold</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						Matched cues whose start times differ by more than half the tolerance are flagged
+						as drift, not aligned. The diff table reports the exact millisecond difference so
+						you can fix the source track instead of guessing.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-semibold text-slate-950">Overlap and unmatched cues</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						Any cue that starts before the previous cue ends is marked overlap with the measured
+						milliseconds. Anchor cues with no secondary match at all are marked unmatched, so a
+						missing translation never disappears silently.
+					</p>
+				</div>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				Sequential mode handles a different timing problem: two files that start at 00:00:00 but
+				describe different parts of one long recording. The gap control shifts each track after
+				the previous one, so parts join without a jump cut. Set the gap to 500 ms for a natural
+				breath, or 0 ms when the parts should be perfectly continuous.
+			</p>
+			<div class="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-1.5 min-w-0">
+				<h3 class="text-sm font-semibold text-amber-950">Read the QC report before publishing</h3>
+				<p class="text-xs sm:text-sm text-amber-900 leading-relaxed break-words">
+					The Timeline QC panel counts errors, warnings, and notes, and the .qc.txt download
+					lists every flagged cue with its index and message. The merged subtitle file itself
+					never contains QC comments, so you can ship it directly after review. Timing issues
+					are reported, never silently repaired.
+				</p>
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="merge-related-tools-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5 min-w-0"
+		>
+			<div class="space-y-1 min-w-0">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Related Tools
+				</p>
+				<h2 id="merge-related-tools-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Subtitle tools that pair with a merge pass
+				</h2>
+				<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+					All of these pages run in the same browser-local engine with zero uploads and no file
+					size caps.
+				</p>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+				{
+					relatedTools.map((tool) => (
+						<a
+							href={tool.href}
+							class="block rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-1.5 hover:border-sky-300 hover:bg-sky-50/60 transition-colors min-w-0"
+						>
+							<span class="block text-sm font-semibold text-slate-950 break-words">
+								{tool.title}
+							</span>
+							<span class="block text-xs text-slate-600 leading-relaxed break-words">
+								{tool.detail}
+							</span>
+							<span class="block font-mono text-[11px] text-sky-700 break-all">{tool.href}</span>
+						</a>
+					))
+				}
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="merge-faq-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5 min-w-0"
+		>
+			<h2 id="merge-faq-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Frequently Asked Questions
+			</h2>
+			<dl class="divide-y divide-slate-100">
+				{
+					faqs.map((item) => (
+						<div class="py-4 first:pt-0 last:pb-0 space-y-1.5 min-w-0">
+							<dt class="text-sm sm:text-base font-semibold text-slate-900 break-words">
+								{item.question}
+							</dt>
+							<dd class="text-sm text-slate-600 leading-relaxed break-words">{item.answer}</dd>
+						</div>
+					))
+				}
+			</dl>
+		</section>
+	</div>
+</BaseLayout>

@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { ROUTE_PRESETS } from '../lib/route-presets';
+import { UTILITY_TOOL_LINKS } from '../lib/utility-tools';
 import type { RouteFaqItem, ToolRoutePreset } from '../lib/types';
 
 interface Props {
@@ -78,7 +79,7 @@ const breadcrumbListNode = {
 const webApplicationNode = {
 	'@type': 'WebApplication',
 	'@id': `${canonicalUrl}#webapp`,
-	name: preset?.h1 ?? pageTitle,
+	name: preset?.h1 ?? (title ? title.split('|')[0].trim() : pageTitle),
 	url: canonicalUrl,
 	image: ogImageUrl,
 	description: pageDescription,
@@ -361,7 +362,7 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 						</summary>
 						<nav
 							aria-label="Mobile subtitle converter presets"
-							class="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-2 shadow-lg z-40 space-y-1"
+							class="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg z-40 space-y-1"
 						>
 							{
 								ROUTE_PRESETS.map((route) => {
@@ -390,6 +391,38 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 									);
 								})
 							}
+							<div class="border-t border-slate-200 pt-1.5 mt-1.5 space-y-0.5">
+								<p class="px-3 pt-0.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+									Subtitle Utilities
+								</p>
+								{
+									UTILITY_TOOL_LINKS.map((tool) => {
+										const isActive = tool.path === normalizedPath;
+										return (
+											<a
+												href={tool.path}
+												aria-current={isActive ? 'page' : undefined}
+												class:list={[
+													'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+													isActive
+														? 'bg-sky-600 text-white'
+														: 'text-slate-700 hover:bg-sky-50 hover:text-sky-900',
+												]}
+											>
+												<span class="break-words">{tool.navLabel}</span>
+												<span
+													class:list={[
+														'shrink-0 font-mono text-[10px] uppercase',
+														isActive ? 'text-sky-100' : 'text-slate-400',
+													]}
+												>
+													{tool.shortTag}
+												</span>
+											</a>
+										);
+									})
+								}
+							</div>
 							<div class="border-t border-slate-100 pt-1 mt-1 flex items-center justify-between px-2 py-1 text-[11px] text-slate-500">
 								<a href="/about/" class="hover:text-slate-900">About</a>
 								<a href="/privacy/" class="hover:text-slate-900">Privacy</a>
@@ -415,6 +448,26 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 									]}
 								>
 									{route.navLabel}
+								</a>
+							);
+						})
+					}
+					<span class="hidden md:inline-block h-4 w-px bg-slate-200 mx-1" aria-hidden="true"></span>
+					{
+						UTILITY_TOOL_LINKS.map((tool) => {
+							const isActive = tool.path === normalizedPath;
+							return (
+								<a
+									href={tool.path}
+									aria-current={isActive ? 'page' : undefined}
+									class:list={[
+										'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+										isActive
+											? 'bg-sky-600 border-sky-600 text-white shadow-2xs'
+											: 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-950',
+									]}
+								>
+									{tool.navLabel}
 								</a>
 							);
 						})
@@ -582,7 +635,7 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 
 		<footer class="border-t border-slate-200 bg-white mt-12">
 			<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-12 gap-8 text-xs text-slate-600">
-				<div class="md:col-span-5 space-y-2.5">
+				<div class="md:col-span-3 space-y-2.5 min-w-0">
 					<div class="flex items-center gap-2">
 						<span class="inline-flex h-6 w-7 items-center justify-center rounded-md bg-slate-900 text-sky-400 font-mono text-[11px] font-bold">
 							SRT
@@ -597,7 +650,7 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 					</p>
 				</div>
 
-				<div class="md:col-span-4 space-y-2.5">
+				<div class="md:col-span-3 space-y-2.5 min-w-0">
 					<p class="font-semibold uppercase tracking-wider text-[11px] text-slate-900">
 						Converter Presets
 					</p>
@@ -607,7 +660,7 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 								<li>
 									<a
 										href={route.path}
-										class="hover:text-slate-950 underline-offset-4 hover:underline"
+										class="break-words hover:text-slate-950 underline-offset-4 hover:underline"
 									>
 										{route.navLabel}
 									</a>
@@ -617,7 +670,28 @@ const adsenseClientId = 'ca-pub-9938576884024908';
 					</ul>
 				</div>
 
-				<div class="md:col-span-3 space-y-2.5">
+				<div class="md:col-span-3 space-y-2.5 min-w-0">
+					<p class="font-semibold uppercase tracking-wider text-[11px] text-slate-900">
+						Subtitle Utilities
+					</p>
+					<ul class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-1.5">
+						{
+							UTILITY_TOOL_LINKS.map((tool) => (
+								<li class="min-w-0">
+									<a
+										href={tool.path}
+										class="break-words hover:text-slate-950 underline-offset-4 hover:underline"
+									>
+										{tool.navLabel}
+									</a>
+									<span class="ml-1.5 font-mono text-[10px] text-slate-400">{tool.shortTag}</span>
+								</li>
+							))
+						}
+					</ul>
+				</div>
+
+				<div class="md:col-span-3 space-y-2.5 min-w-0">
 					<p class="font-semibold uppercase tracking-wider text-[11px] text-slate-900">
 						Trust &amp; Indexing
 					</p>

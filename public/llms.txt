@@ -50,6 +50,14 @@
 - [Whisper JSON Missing Word Timestamps](https://jsontosrt.com/whisper-json-missing-word-timestamps/): See the proportional SRT fallback when a Whisper segment has start and end but no words array.
 - [Whisper Overlapping and Out-of-Order Cues](https://jsontosrt.com/whisper-overlapping-out-of-order-cues/): Export overlapping, backward, and reversed Whisper cues unchanged, with timeline QC warnings beside the SRT.
 
+## Subtitle Utility Routes
+
+- [Merge Dual & Multi-Track Subtitles](https://jsontosrt.com/merge-subtitles/): Combine 2 to 10 local SRT or VTT files in Stacked (bilingual), Interleave, or Sequential mode with adjustable overlap tolerance, language prefixes, per-cue timing diff preview, and Timeline QC.
+- [Fix Subtitle Encoding & Mojibake](https://jsontosrt.com/fix-subtitle-encoding/): Inspect raw ArrayBuffer subtitle bytes locally with browser-native TextDecoder across 11 encodings (UTF-8, UTF-16LE/BE, GB18030/GBK, Big5, Shift-JIS, EUC-KR, Windows-1251/1252/1250/1256), compare before/after cues, and export UTF-8 with optional BOM and LF/CRLF line endings.
+- [SRT, VTT & ASS to JSON Converter](https://jsontosrt.com/srt-to-json/): Reverse-convert SRT, WebVTT, or ASS/SSA subtitles into OpenAI Whisper verbose_json, Deepgram utterances (with speaker prefix extraction), or generic timestamped JSON for lossless JSON -> SRT -> JSON round-trips.
+- [TTML / DFXP to SRT Converter](https://jsontosrt.com/ttml-to-srt/): Convert broadcast TTML/DFXP XML subtitles (plus SBV, LRC, and ASS/SSA text formats) into UTF-8 SRT or WebVTT with line wrapping, millisecond offset shift, and Timeline QC. Text-based captions only; no bitmap OCR.
+- [SAMI (.smi) to SRT Converter](https://jsontosrt.com/smi-to-srt/): Convert legacy SAMI SYNC subtitle tracks (plus SBV, LRC, and ASS/SSA text formats) into clean UTF-8 SRT or WebVTT with line wrapping, offset shift, and Timeline QC.
+
 ## Trust, Privacy & Legal Pages
 
 - [About JSON to SRT](https://jsontosrt.com/about/): Architecture overview, supported speech-to-text JSON dialects, cue-wrapping algorithm notes, and verification standards.

@@ -12,7 +12,7 @@
 - **联系邮箱**：`hello@jsontosrt.com` 与 `privacy@jsontosrt.com` 已启用 Cloudflare Email Routing，转发至 `liqi199315@gmail.com`（2026-11-12 核验：`enabled: true, status: ready`；本轮未重查）
 - **90 天试验窗口**：`2026-11-12` 至 `2027-02-10`（详见 `PLAN_90DAY.md`）
 - **主关键词**：`whisper json to srt converter`
-- **内容路由**：源码与本地构建现为 22 条（19 个工具页 + `/about/`、`/privacy/`、`/terms/`）。2026-11-17 完成 AdSense 合规、首发 6 页 guides 增厚与 6 个高意图新工具子路由扩充。2026-11-23 追加 2 个 Whisper 时间轴排错长尾页，邻接已有幻觉页，不追逐品牌词。
+- **内容路由**：源码与本地构建现为 27 条（19 个 ASR JSON 转换与排错页 + 5 个纯前端字幕工具页 `/merge-subtitles/`、`/fix-subtitle-encoding/`、`/srt-to-json/`、`/ttml-to-srt/`、`/smi-to-srt/` + 3 个信任页 `/about/`、`/privacy/`、`/terms/`）。2026-11-17 完成 AdSense 合规、首发 6 页 guides 增厚与 6 个高意图新工具子路由扩充；2026-11-23 上午追加 2 个 Whisper 时间轴排错长尾页，同日晚完成 4 组纯前端字幕工具底层引擎与 5 个新工具路由扩充。
 - **当前流量与转化基线**：不再是全盲。`2026-11-15` 只读报表（`--no-write`，退出码 0）：
   - GA4 属性 `564001579`，窗口 `28daysAgo` 至 `yesterday`，报告生成于 `2026-11-14T16:44:23.166Z`：69 用户、69 会话、12 个互动会话、81 次浏览、`subtitle_export` 2 次。来源为直接 54、Bing 自然 12、Product Hunt 3。这是站内会话，不是搜索点击。
   - Google Search Console `sc-domain:jsontosrt.com`，窗口 `2026-10-16` 至 `2026-11-12`：点击 0、曝光 0、查询与页面均为空。
@@ -22,7 +22,7 @@
 ## 已就绪资产清单
 
 - **多方言类型契约（`src/lib/types.ts`）**：覆盖 `openai-verbose-json`、`openai-diarized-json`、`whisperx-diarized`、`whisper-cpp`、`deepgram-nova`、`assemblyai-utterances`、`capcut-draft` 七种输入方言与 `srt`、`vtt`、`txt`、`csv` 四种导出格式。faster-whisper 与 Premiere 修复页复用 Whisper `segments` / `words`，不另建解析器。Deepgram utterances 复用已有 Deepgram 解析器。
-- **22 个静态内容路由（19 个工具路由 + 3 个 E-E-A-T 信任页）**：
+- **27 个静态内容路由（19 个 ASR JSON 工具路由 + 5 个纯前端字幕工具路由 + 3 个 E-E-A-T 信任页）**：
   1. `/`（Whisper JSON to SRT 主转换器）
   2. `/whisper-verbose-json-to-srt/`（OpenAI `verbose_json` 词级时间轴转 SRT）
   3. `/whisper-json-to-vtt/`（Whisper JSON 转 WebVTT）
@@ -42,9 +42,14 @@
   17. `/whisper-hallucination-timestamp-desync/`（Whisper 静音幻觉循环、时间戳漂移与剪除排错）
   18. `/whisper-json-missing-word-timestamps/`（Whisper JSON 缺少 `words` 数组时按字符比例切分 SRT，不能还原未存储的停顿）
   19. `/whisper-overlapping-out-of-order-cues/`（Whisper 重叠、乱序与倒序 cue 原样导出，并报告 overlap 与 reversed-range）
-  20. `/about/`（100% 浏览器内存架构说明、SRT/WebVTT 时间戳测试规范、ASR 方言矩阵、非官方独立声明与 `hello@jsontosrt.com` 联络方式）
-  21. `/privacy/`（零上传内存处理承诺、GA4 匿名化、Google AdSense / DoubleClick Cookie 披露、opt-out 与 GDPR/CCPA 摘要）
-  22. `/terms/`（MIT 开源工具使用许可、播出前字幕时间轴人工复核责任、`rel="sponsored"` 赞助与联盟披露规范）
+  20. `/merge-subtitles/`（2-10 轨 SRT/VTT 合并：Stacked 双语叠行 / Interleave 交错 / Sequential 顺延拼接 + 逐 cue 漂移/重叠预览 + Timeline QC）
+  21. `/fix-subtitle-encoding/`（原始 `ArrayBuffer` + 原生 `TextDecoder` 11 编码打分、乱码前后 10 cue 对比、UTF-8 BOM 与 LF/CRLF 导出 + Timeline QC）
+  22. `/srt-to-json/`（SRT/VTT/ASS 反向转 OpenAI `verbose_json` / Deepgram `utterances` / Generic Timestamped JSON，闭环 JSON -> SRT -> JSON 往返）
+  23. `/ttml-to-srt/`（TTML/DFXP XML + SBV/LRC/ASS 文本字幕转 UTF-8 SRT/VTT，支持偏移、重排与 Timeline QC，不含位图 OCR）
+  24. `/smi-to-srt/`（SAMI `.smi` + SBV/LRC/ASS 文本字幕转 UTF-8 SRT/VTT，支持偏移、重排与 Timeline QC）
+  25. `/about/`（100% 浏览器内存架构说明、SRT/WebVTT 时间戳测试规范、ASR 方言矩阵、非官方独立声明与 `hello@jsontosrt.com` 联络方式）
+  26. `/privacy/`（零上传内存处理承诺、GA4 匿名化、Google AdSense / DoubleClick Cookie 披露、opt-out 与 GDPR/CCPA 摘要）
+  27. `/terms/`（MIT 开源工具使用许可、播出前字幕时间轴人工复核责任、`rel="sponsored"` 赞助与联盟披露规范）
 - **时间轴 QC（`src/lib/timeline-qc.ts`）**：`convertAsrJson` 返回 `qc` 报告，稳定 issue code 为 `invalid-time`、`unrepresentable-time`、`negative-time`、`reversed-range`、`zero-duration`、`overlap`、`empty-segment`、`empty-cue`、`offset-clamped`，每条带 severity、segment/cue 的 1-based 位置、原值和时间轴说明。非有限值（JSON `1e999`）和毫秒时间戳溢出的有限值（`1e308`）不再输出 `00:00:00,000`：受影响 segment 被省略并计数，全部被省略时转换失败并返回 QC 明细；`formatTimestamp` 对非有限值抛 `RangeError`。倒序保留原时间不改写，重叠只报告不移动 cue，空段省略并计数。负输入时间钳到 0 并报告；负用户偏移导致越过 0 的 cue 钳到 0 至 0.05 秒并记 `offset-clamped`，不误报为倒序。页面的 `timeline-qc-summary` / `timeline-qc-issues` 常驻显示汇总和明细，复制或下载后 `export-status` 标出导出风险，另有 `.qc.txt` 报告下载，SRT 内不写注释；QC 文案和报告不含转写正文。
 - **独立 Node ESM CLI（`bin/json-to-srt.mjs`）**：通过 `npm run build:cli`（esbuild）编译，直接复用 `src/lib/subtitle-engine.ts`，支持 `--input`、`--output`、`--format srt|vtt|txt|csv`、`--max-chars`、`--max-lines`、`--offset-ms`、`--speaker` / `--no-speaker`、`--fail-on-qc` 与 stdin 管道。有 QC 问题时把纯文本报告写到 stderr；`--fail-on-qc` 在 QC 有 error 时退出码 3 且不写输出。`tests/cli.test.ts` 共 13 项端到端 CLI 测试。
 - **栅格化社交卡片与双 IndexNow 凭据**：通过 Playwright 栅格化生成 `public/og-image.png`（1200x630）与 `public/github-social-preview.png`（1280x640），`BaseLayout.astro` 引用 PNG 卡片与 `og:image:type`；生成 `public/a8f4c2e91b7d40639e5a12c8d4f07b31.txt` 响应搜索引擎默认探查。
@@ -85,3 +90,4 @@
 - `2026-11-15` `[AI]`：完成 C02 时间轴 QC。先用当前代码复现：JSON 里有限值 `1e308` 在微秒取整时溢出，cue 变成 `NaN`，导出为 `00:00:00,000 --> 00:00:00,000`。新增 `src/lib/timeline-qc.ts`，把输入扫描、cue 分析与稳定 issue code 分开；非法或不可表示时间不再伪装成 0，受影响 segment 省略并计数，全空时拒绝转换；倒序保留原时间只报告，重叠只报告不移动，空段省略并计数；负输入时间钳到 0 并报告，负用户偏移单独记 `offset-clamped`。页面新增常驻 QC 汇总/明细、复制或下载风险提示与 `.qc.txt` 报告下载，保留原有 `data-testid`；CLI 把报告写到 stderr，并新增 `--fail-on-qc`（有 error 时退出码 3，不写输出）。新增 `tests/fixtures/qc/` 脱敏 fixture 与 `tests/timeline-qc.test.ts`。`npx tsc --noEmit` 退出码 0；`npm run verify:all` 退出码 0（Vitest 53/53，Astro 15 页，`seo:check` 14 路由 / 26 个必需文件 / 791 条内链，Playwright 8/8）；`npm run release:check` 退出码 0，状态 `pending_live_manifest`。C02 代码提交是 `57de751`。主会话最终 `npm run verify:all` 退出码 0（Vitest 53/53，Playwright 8/8，14 路由，26 个产物）；共享 release 测试 9/9；CLI overflow `--fail-on-qc` 退出码 3 且不写文件。证据 `/Volumes/WorkSSD/Scratch/c02-cli-final`。线上没有 `release.json`，`57de751` 与 `4571298` 都未证明已上线。`4571298` 只作 C01 之前的源码基线。未 push、未部署。
 - `2026-11-17` `[AI]`：完成 AdSense 准入合规、首发 6 核心页 guides 深度增厚与 6 个高意图新子路由建设。新建 `public/ads.txt`（`pub-9938576884024908`）；在 `src/pages/privacy.astro` 补充 Google AdSense、DoubleClick Cookie、opt-out 与 GDPR CMP 披露；在 `src/layouts/BaseLayout.astro` 严格按 `!isLocalHost && host === 'jsontosrt.com'` 门控注入 AdSense 脚本并更新 `public/_headers` CSP，本地 Playwright 外部请求数严格为 0；为 `src/lib/route-presets.ts` 首发 6 页补齐深度差异化 `guides` 与 Expected SRT 输出；新增 6 个高意图子路由：`/assemblyai-json-to-srt/`、`/broadcast-subtitle-qc-standards/`、`/elevenlabs-scribe-json-to-srt/`、`/aws-transcribe-json-to-srt/`、`/davinci-resolve-subtitle-import-error/`、`/whisper-hallucination-timestamp-desync/`；同步更新 `scripts/seo-preflight.mjs`、`public/llms.txt`、`tests/e2e/converter.spec.ts` 与 `AGENTS.md`；`npm run verify:all` 退出码 0（Vitest 57/57，Astro 21 页，`seo:check` 20 路由 / 32 必需文件 / 1619 条内链，Playwright 8/8 覆盖全部 11 个长尾工具页且 375px 零溢出）。未 push、未部署。
 - `2026-11-23` `[AI]`：按当日任务新增 2 个邻接幻觉页的 Whisper 时间轴排错长尾页，不改首页 title/description，不部署。页面为 `/whisper-json-missing-word-timestamps/`（H1: Whisper JSON Missing Word Timestamps）与 `/whisper-overlapping-out-of-order-cues/`（H1: Whisper Overlapping and Out-of-Order Cues）。样本经 `convertAsrJson` 实转：缺词段在 `00:00:05,914` 按字符比例相接，带词段在 `00:00:16,200` 另起；重叠页保留 `00:00:11,200 --> 00:00:09,050`，QC 只报 overlap 与 reversed-range 警告且不改时间。导航、相关卡片、幻觉页内链、`llms.txt`、`seo-preflight`、README 与 E2E 已接上。本仓库外的 `../../40_shared/scripts/indie-release-manifest.mjs` 不在检出中，本地补了一个只根据 `sitemap-0.xml` 写 `project`、`siteUrl`、`routeCount`、`routes` 的脚本，不含密钥。`npm run verify:all` 退出码 0（Vitest 59/59，Astro 23 页，`seo:check` 22 路由 / 34 必需文件 / 1959 条内链，Playwright 8/8，13 个长尾页 375px 零溢出）。未部署。上线前必须带 `PUBLIC_SITE_URL=https://jsontosrt.com` 与 `PUBLIC_GA4_MEASUREMENT_ID=G-085WZLBQ8F` 重建，否则衡量 ID 会落到 `G-PENDING000`。
+- `2026-11-23` `[AI]`：基于竞品 `subtitlekit.com` Gate 7 反证结论，完成 4 组纯前端、零上传、无体积限制的字幕工具引擎与 5 个新工具路由扩充（rebase 到 `origin/main` 后总路由 27 条，构建产物 28 页）。新增纯函数引擎与单测：`src/lib/subtitle-merge.ts`（2-10 轨 Stacked/Interleave/Sequential 合并与逐 cue 漂移/重叠预览）、`src/lib/subtitle-encoding.ts`（原生 `TextDecoder` 11 编码打分、乱码前后 10 cue 对比、UTF-8 BOM 与 LF/CRLF 导出及 QC 联动）、`src/lib/subtitle-to-json.ts`（SRT/VTT/ASS 反向转 OpenAI `verbose_json` / Deepgram `utterances` / Generic Timestamped JSON，闭环 JSON->SRT->JSON 往返）、`src/lib/subtitle-parsers.ts`（TTML/DFXP、SAMI、SBV、LRC、ASS/SSA 文本解析与偏移/重排/QC，明确不引入位图 OCR）。新增 4 个工作台组件、5 个路由（`/merge-subtitles/`、`/fix-subtitle-encoding/`、`/srt-to-json/`、`/ttml-to-srt/`、`/smi-to-srt/`）与 `src/lib/utility-tools.ts`，完善首页/导航/页脚内链及 `WebApplication` + `FAQPage` JSON-LD，同步更新 `scripts/seo-preflight.mjs`、`public/llms.txt`、`tests/e2e/utilities.spec.ts` 与 `AGENTS.md`，经全新会话独立核验 PASS 后提交推送并部署至 `https://jsontosrt.com`。

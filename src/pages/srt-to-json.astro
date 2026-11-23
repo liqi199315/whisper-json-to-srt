@@ -1,0 +1,431 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ReverseJsonWorkbench from '../components/ReverseJsonWorkbench.astro';
+import type { RouteFaqItem } from '../lib/types';
+
+interface RelatedTool {
+	href: string;
+	label: string;
+	detail: string;
+}
+
+interface SchemaComparisonRow {
+	aspect: string;
+	openai: string;
+	deepgram: string;
+	generic: string;
+}
+
+const PAGE_TITLE = 'SRT, VTT & ASS to JSON Converter | Whisper & Deepgram Schemas';
+const PAGE_DESCRIPTION =
+	'Convert local SRT, WebVTT, and ASS subtitles into OpenAI Whisper verbose_json, Deepgram utterances, or generic timestamped JSON. Zero upload, no file size cap, and Timeline QC on every cue.';
+
+const faqs: RouteFaqItem[] = [
+	{
+		question: 'Does this SRT to JSON converter upload my subtitle files?',
+		answer:
+			'No. Every file is read with the browser File.text() API and parsed inside your tab memory. The page never posts subtitle text, speaker labels, or filenames to a server, so it works on offline laptops and inside restricted networks. Because no upload job exists, there is also no artificial 2 MB size cap: multi-hour SRT and WebVTT tracks convert locally at full length.',
+	},
+	{
+		question: 'Which JSON schemas can I export from a subtitle file?',
+		answer:
+			'You can export three presets: OpenAI Whisper verbose_json with a top-level text string and segments that carry id, start, end, and text; Deepgram utterances with results.utterances that carry start, end, transcript, and speaker; and generic timestamped JSON with numbered cues that carry index, start, end, duration, and text. The timestamp unit selector switches the generic schema between decimal seconds and integer milliseconds.',
+	},
+	{
+		question: 'Can I convert the exported JSON back to SRT?',
+		answer:
+			'Yes. The generated verbose_json and Deepgram payloads re-import in the main JSON to SRT converter on the home page. Timestamps are written with three decimal places, so a subtitle to JSON to subtitle round-trip keeps the original millisecond grid. A common workflow is to export JSON, adjust transcript text in a script, then convert the edited JSON back to SRT without retiming by hand.',
+	},
+	{
+		question: 'How are speaker names detected in subtitle files?',
+		answer:
+			'With speaker detection enabled, the parser reads four conventions: bracketed prefixes such as [SPEAKER_00]: and [Host] with or without a colon, bare labels such as SPEAKER_01: at the start of a cue, WebVTT voice spans such as <v Host>, and the Name actor column in ASS Dialogue lines. Prefixes are removed from the transcript text, deduplicated into one speaker list, and written to the schema field that supports speakers.',
+	},
+	{
+		question: 'What does the Timeline QC panel check before export?',
+		answer:
+			'The panel inspects every parsed cue for reversed ranges, zero duration cues, overlapping timing, and non-finite values. A clean result means the cue list is ready for downstream scripts. If issues exist, the summary lists the affected cue numbers, the JSON export shows a warning, and you can download a plain text .qc.txt report. The JSON file itself never contains QC comments, so it stays valid for API replay.',
+	},
+];
+
+const RELATED_TOOLS: RelatedTool[] = [
+	{
+		href: '/',
+		label: 'JSON to SRT converter',
+		detail: 'Send the exported verbose_json back to SubRip, WebVTT, TXT, or CSV.',
+	},
+	{
+		href: '/whisper-verbose-json-to-srt/',
+		label: 'Whisper verbose_json to SRT',
+		detail: 'Word-level Whisper timelines reflowed into broadcast line widths.',
+	},
+	{
+		href: '/deepgram-json-to-srt/',
+		label: 'Deepgram JSON to SRT',
+		detail: 'Re-import Deepgram utterances with speaker turns intact.',
+	},
+	{
+		href: '/merge-subtitles/',
+		label: 'Merge subtitles',
+		detail: 'Stack or interleave bilingual SRT and VTT tracks after JSON edits.',
+	},
+	{
+		href: '/fix-subtitle-encoding/',
+		label: 'Fix subtitle encoding',
+		detail: 'Repair GBK, CP1251, Shift-JIS, or UTF-16 mojibake before converting.',
+	},
+	{
+		href: '/ttml-to-srt/',
+		label: 'TTML to SRT',
+		detail: 'Bring broadcast TTML and DFXP captions into the same JSON pipeline.',
+	},
+];
+
+const SCHEMA_ROWS: SchemaComparisonRow[] = [
+	{
+		aspect: 'Root path',
+		openai: 'text plus segments[]',
+		deepgram: 'results.utterances[]',
+		generic: 'cues[] with cue_count',
+	},
+	{
+		aspect: 'Timing unit',
+		openai: 'Decimal seconds',
+		deepgram: 'Decimal seconds',
+		generic: 'Seconds or milliseconds',
+	},
+	{
+		aspect: 'Text field',
+		openai: 'segments[].text',
+		deepgram: 'utterances[].transcript',
+		generic: 'cues[].text',
+	},
+	{
+		aspect: 'Cue identity',
+		openai: 'segments[].id from 0',
+		deepgram: 'utt_0 style id',
+		generic: 'cues[].index from 1',
+	},
+	{
+		aspect: 'Speaker field',
+		openai: 'Not included',
+		deepgram: 'utterances[].speaker',
+		generic: 'cues[].speaker when detected',
+	},
+	{
+		aspect: 'Typical use',
+		openai: 'Replay against OpenAI examples',
+		deepgram: 'Speaker analytics and turn review',
+		generic: 'Custom scripts and internal catalogs',
+	},
+];
+---
+
+<BaseLayout
+	title={PAGE_TITLE}
+	description={PAGE_DESCRIPTION}
+	canonicalPath="/srt-to-json/"
+	faqs={faqs}
+>
+	<div class="space-y-8 sm:space-y-10 min-w-0">
+		<section class="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
+			<div class="lg:col-span-7 space-y-3 min-w-0">
+				<div
+					class="inline-flex flex-wrap items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-medium text-sky-900"
+				>
+					<span>Reverse converter</span>
+					<span class="text-sky-400">/</span>
+					<span>SRT, VTT, ASS input</span>
+					<span class="text-sky-400">/</span>
+					<span>Three JSON schemas</span>
+				</div>
+				<h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950">
+					SRT, VTT &amp; ASS to JSON Converter (Whisper &amp; Deepgram Schemas)
+				</h1>
+				<p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
+					Turn finished subtitle files back into structured transcript JSON. Drop a local SRT,
+					WebVTT, or ASS track, review the cue grid in the Timeline QC panel, and export OpenAI
+					Whisper verbose_json, Deepgram utterances, or generic timestamped JSON. Parsing runs in
+					browser memory with zero uploads and no file size limit.
+				</p>
+				<p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+					Built for round-trip work: export JSON, edit transcript text in your own tooling, then
+					convert the JSON back to SRT on the home page with the same millisecond timings.
+				</p>
+			</div>
+
+			<aside
+				aria-label="Technical summary for reverse subtitle conversion"
+				class="lg:col-span-5 w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3"
+			>
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+					<h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+						Technical Summary
+					</h2>
+					<span class="font-mono text-xs text-slate-500">/srt-to-json/</span>
+				</div>
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+					<div>
+						<dt class="font-semibold text-slate-900">Subtitle input</dt>
+						<dd class="text-slate-600 mt-0.5">
+							SubRip, WebVTT with voice spans, and ASS or SSA Dialogue events
+						</dd>
+					</div>
+					<div>
+						<dt class="font-semibold text-slate-900">JSON schemas</dt>
+						<dd class="text-slate-600 mt-0.5">
+							OpenAI verbose_json, Deepgram utterances, generic timestamped
+						</dd>
+					</div>
+					<div>
+						<dt class="font-semibold text-slate-900">Round-trip</dt>
+						<dd class="text-slate-600 mt-0.5">
+							Exported JSON re-imports in the main converter; timings stay on the millisecond
+							grid
+						</dd>
+					</div>
+					<div>
+						<dt class="font-semibold text-slate-900">Execution</dt>
+						<dd class="text-slate-600 mt-0.5">
+							Client-side File.text() in local RAM; no file size cap; no external API calls
+						</dd>
+					</div>
+				</dl>
+				<div class="rounded-lg bg-emerald-50/70 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-950 leading-relaxed">
+					Timeline QC runs before export, so reversed, overlapping, or zero-duration cues are
+					visible before the JSON reaches your pipeline.
+				</div>
+			</aside>
+		</section>
+
+		<ReverseJsonWorkbench />
+
+		<section
+			id="round-trip-guide"
+			aria-labelledby="round-trip-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Round-trip workflow
+				</p>
+				<h2 id="round-trip-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Closing the JSON to SRT to JSON loop with the main converter
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed">
+				Subtitle files are usually the end of a transcription pipeline, but caption review
+				often moves backward: an editor fixes punctuation, merges cues, or rewrites a line, and
+				the transcript store needs the structured version again. This page covers that reverse
+				direction. The main JSON to SRT converter covers the forward direction, and the two share
+				the same timestamp contract, which is decimal seconds rounded to three places.
+			</p>
+			<ol class="space-y-3 text-sm text-slate-700 leading-relaxed list-decimal pl-5">
+				<li>
+					<strong>Load the edited subtitles.</strong> Drop the SRT or WebVTT file that came out of
+					your editor. The status bar reports the detected format, cue count, total duration, and
+					detected speakers.
+				</li>
+				<li>
+					<strong>Pick the schema your pipeline expects.</strong> Choose verbose_json for OpenAI
+					style fixtures, Deepgram utterances for speaker analytics, or generic timestamped JSON
+					for internal scripts.
+				</li>
+				<li>
+					<strong>Review the cue grid.</strong> The QC panel lists reversed ranges, overlaps, and
+					zero-duration cues by cue number. Download the .qc.txt report when you need to hand the
+					issues to another editor.
+				</li>
+				<li>
+					<strong>Export and re-import.</strong> Download the .json file, edit the text fields if
+					needed, then open the home page, paste the JSON, and export SRT or WebVTT again. Timings
+					return unchanged because both directions read the same decimal seconds.
+				</li>
+			</ol>
+			<p class="text-sm text-slate-700 leading-relaxed">
+				Keep one rule in mind: do not add comments or trailing commas to the exported JSON if you
+				plan to replay it against an API. The browser converter accepts standard JSON only, and
+				the QC report is kept in a separate .qc.txt file for exactly this reason.
+			</p>
+			<p class="text-sm text-slate-700 leading-relaxed">
+				Continue with the
+				<a href="/" class="font-semibold text-sky-800 underline underline-offset-4">
+					main JSON to SRT converter
+				</a>
+				when you are ready to go back to subtitle files.
+			</p>
+		</section>
+
+		<section
+			id="schema-reference"
+			aria-labelledby="schema-reference-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Schema field reference
+				</p>
+				<h2 id="schema-reference-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					OpenAI verbose_json vs Deepgram utterances vs generic timestamped JSON
+				</h2>
+				<p class="text-sm text-slate-600">
+					All three presets describe the same cue list. They differ in nesting, naming, and
+					timestamp units.
+				</p>
+			</div>
+
+			<div class="w-full max-w-full overflow-x-auto rounded-xl border border-slate-200">
+				<table class="w-full min-w-[38rem] text-left border-collapse text-xs sm:text-sm">
+					<thead>
+						<tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[11px]">
+							<th scope="col" class="py-2.5 px-3 font-semibold">Field aspect</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">OpenAI verbose_json</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Deepgram utterances</th>
+							<th scope="col" class="py-2.5 px-3 font-semibold">Generic timestamped</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100 bg-white">
+						{
+							SCHEMA_ROWS.map((row) => (
+								<tr>
+									<th scope="row" class="py-2.5 px-3 font-semibold text-slate-900 align-top">
+										{row.aspect}
+									</th>
+									<td class="py-2.5 px-3 text-slate-700 align-top break-words">{row.openai}</td>
+									<td class="py-2.5 px-3 text-slate-700 align-top break-words">{row.deepgram}</td>
+									<td class="py-2.5 px-3 text-slate-700 align-top break-words">{row.generic}</td>
+								</tr>
+							))
+						}
+					</tbody>
+				</table>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">OpenAI verbose_json</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						The closest match to OpenAI transcription responses. A top-level text string
+						concatenates every cue, while segments keep zero-based ids and decimal seconds. Use it
+						when fixtures or evaluation scripts expect the verbose_json shape.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">Deepgram utterances</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						Nested under results.utterances with transcript text and a speaker value. Numeric
+						subtitle prefixes become integer speakers, named prefixes stay as strings, and cues
+						without a prefix fall back to speaker 0.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">Generic timestamped JSON</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+						A compact internal format: numbered cues with start, end, duration, and text, plus an
+						optional speaker. Switch the unit selector to milliseconds when your scripts expect
+						integer timings instead of decimal seconds.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<section
+			id="speaker-extraction"
+			aria-labelledby="speaker-extraction-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Speaker prefixes
+				</p>
+				<h2 id="speaker-extraction-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Automatic speaker prefix extraction rules
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed">
+				Many caption tools prepend a speaker tag to each cue instead of writing a dedicated
+				speaker field. With auto-detect enabled, the parser strips those tags from the transcript
+				text and records the speaker separately, so the JSON output is clean and the original
+				dialogue is preserved.
+			</p>
+			<ul class="space-y-2.5 text-sm text-slate-700 leading-relaxed list-disc pl-5">
+				<li>
+					<strong>Bracketed labels:</strong> [SPEAKER_00]:, [SPEAKER_01], and [Host] at the start
+					of a cue are removed. A trailing colon is optional when the label looks like a standard
+					SPEAKER index.
+				</li>
+				<li>
+					<strong>Bare speaker labels:</strong> SPEAKER_01: and SPEAKER 12: are recognized without
+					brackets, which covers files exported from diarization notebooks.
+				</li>
+				<li>
+					<strong>WebVTT voice spans:</strong> tags such as &lt;v Host&gt; supply the speaker name,
+					while nested style tags such as &lt;c.yellow&gt; are removed from the text.
+				</li>
+				<li>
+					<strong>ASS actor names:</strong> the Name column in each Dialogue line becomes the
+					speaker, curly-brace override tags are removed, and hard line breaks become spaces.
+				</li>
+			</ul>
+			<p class="text-sm text-slate-700 leading-relaxed">
+				Detected names are deduplicated into one list in document order. Turn detection stays off
+				when the checkbox is cleared, in which case prefixes remain part of the transcript text and
+				the verbose_json output is unchanged apart from the embedded tag.
+			</p>
+		</section>
+
+		<section
+			aria-labelledby="related-tools-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Related workflows
+				</p>
+				<h2 id="related-tools-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Continue with another local subtitle tool
+				</h2>
+			</div>
+			<ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+				{
+					RELATED_TOOLS.map((tool) => (
+						<li class="min-w-0">
+							<a
+								href={tool.href}
+								class="group block h-full rounded-xl border border-slate-200 bg-slate-50/50 p-4 hover:border-sky-400 hover:bg-sky-50/40 transition-colors"
+							>
+								<span class="block text-sm font-bold text-slate-950 group-hover:text-sky-800 break-words">
+									{tool.label}
+								</span>
+								<span class="mt-1 block text-xs text-slate-600 leading-relaxed break-words">
+									{tool.detail}
+								</span>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</section>
+
+		<section
+			aria-labelledby="faq-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5 min-w-0"
+		>
+			<h2 id="faq-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				Frequently Asked Questions
+			</h2>
+			<dl class="divide-y divide-slate-100">
+				{
+					faqs.map((item) => (
+						<div class="py-4 first:pt-0 last:pb-0 space-y-1.5 min-w-0">
+							<dt class="text-sm sm:text-base font-semibold text-slate-900 break-words">
+								{item.question}
+							</dt>
+							<dd class="text-sm text-slate-600 leading-relaxed break-words">{item.answer}</dd>
+						</div>
+					))
+				}
+			</dl>
+		</section>
+	</div>
+</BaseLayout>

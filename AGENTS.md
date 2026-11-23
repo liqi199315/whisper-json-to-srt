@@ -16,8 +16,8 @@ Read these four files in order at the start of every session before you change c
 - **Workspace stage.** Formal production tool site in `30_products/whisper-json-to-srt/`.
 - **Tech stack.** Astro 5 (`output: 'static'`, `trailingSlash: 'always'`, `build.format: 'directory'`), Tailwind CSS v4, TypeScript (`astro/tsconfigs/strict`), Vitest, Playwright, esbuild for CLI bundling, and Cloudflare Workers Static Assets (`wrangler.jsonc`).
 - **Standalone CLI.** Bundled Node ESM CLI in `bin/json-to-srt.mjs` (built via `npm run build:cli`) wrapping `src/lib/subtitle-engine.ts` for headless automated pipelines. It prints the timeline QC report to stderr and supports `--fail-on-qc` (exit `3`, no output written) for strict pipelines.
-- **Twenty-two content routes.**
-	- **Nineteen converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
+- **Twenty-seven content routes.**
+	- **Nineteen ASR JSON converter tool routes** (require `WebApplication` + `FAQPage` JSON-LD):
 		- `/` (`dist/index.html`)
 		- `/whisper-verbose-json-to-srt/` (`dist/whisper-verbose-json-to-srt/index.html`)
 		- `/whisper-json-to-vtt/` (`dist/whisper-json-to-vtt/index.html`)
@@ -37,6 +37,12 @@ Read these four files in order at the start of every session before you change c
 		- `/whisper-hallucination-timestamp-desync/` (`dist/whisper-hallucination-timestamp-desync/index.html`)
 		- `/whisper-json-missing-word-timestamps/` (`dist/whisper-json-missing-word-timestamps/index.html`)
 		- `/whisper-overlapping-out-of-order-cues/` (`dist/whisper-overlapping-out-of-order-cues/index.html`)
+	- **Five browser-local subtitle utility routes** (require `WebApplication` + `FAQPage` JSON-LD; text-based subtitle processing only, no bitmap OCR):
+		- `/merge-subtitles/` (`dist/merge-subtitles/index.html`; 2-10 track SRT/VTT merger in Stacked, Interleave, and Sequential modes with per-cue timing diff/overlap preview and Timeline QC)
+		- `/fix-subtitle-encoding/` (`dist/fix-subtitle-encoding/index.html`; raw `ArrayBuffer` inspection via native `TextDecoder` across 11 encodings, mojibake before/after preview, UTF-8 BOM + LF/CRLF export, and Timeline QC)
+		- `/srt-to-json/` (`dist/srt-to-json/index.html`; reverse SRT/VTT/ASS to OpenAI `verbose_json`, Deepgram `utterances`, or Generic Timestamped JSON closing the JSON -> SRT -> JSON loop)
+		- `/ttml-to-srt/` (`dist/ttml-to-srt/index.html`; TTML/DFXP XML plus SBV/LRC/ASS text subtitle converter with offset, reflow, and Timeline QC)
+		- `/smi-to-srt/` (`dist/smi-to-srt/index.html`; SAMI `.smi` plus SBV/LRC/ASS text subtitle converter with offset, reflow, and Timeline QC)
 	- **Three E-E-A-T trust routes** (require valid `Organization`, `BreadcrumbList`, or `WebApplication` JSON-LD):
 		- `/about/` (`dist/about/index.html`)
 		- `/privacy/` (`dist/privacy/index.html`)

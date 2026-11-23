@@ -1,0 +1,360 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import RareFormatWorkbench from '../components/RareFormatWorkbench.astro';
+import type { RouteFaqItem } from '../lib/types';
+
+const faqs: RouteFaqItem[] = [
+	{
+		question: 'Does this TTML to SRT converter upload my subtitle file?',
+		answer:
+			'No. The page reads TTML, DFXP, SAMI, SBV, LRC, ASS, SRT, and WebVTT text with the browser File.text() API and converts every cue in local tab memory. There is no multipart form, no storage bucket, and no remote conversion queue. You can open the browser network panel while converting a file and confirm that no subtitle bytes leave the tab.',
+	},
+	{
+		question: 'How are TTML frame and tick timestamps converted to SRT milliseconds?',
+		answer:
+			'Clock values such as 00:00:01.200 keep their millisecond precision. Frame values such as 00:00:04:05 are divided by the declared ttp:frameRate, so at 25 fps the fifth frame adds 0.2 seconds. Offset values ending in h, m, s, ms, f, or t are resolved against the same rates, and t offsets divide by ttp:tickRate. Falls back to 30 fps and 10000000 ticks when the file omits those attributes.',
+	},
+	{
+		question: 'What happens when a TTML p element has begin but no end or dur?',
+		answer:
+			'When end is present it wins. When end is missing the parser adds the dur value to begin, and when both are missing it applies a short default tail and records a parser warning in the status banner. A p element without a readable begin time is skipped and counted, and the cue count in the status banner shows what survived.',
+	},
+	{
+		question: 'Can I convert legacy DFXP captions from broadcast or Flash workflows?',
+		answer:
+			'Yes. DFXP is handled by the same TTML parser, including namespace-prefixed tags, inline styling spans, br line breaks, and character entities. Styling and layout attributes are stripped because SRT and WebVTT carry text only, while begin, end, and dur timing is preserved through the selected line width and offset controls.',
+	},
+	{
+		question: 'Does it also convert SBV, LRC, and ASS files, and what about bitmap formats?',
+		answer:
+			'The workbench accepts SBV comma timing blocks, synced LRC lyric lines, and ASS or SSA Dialogue events in the same input box. Bitmap formats such as SUP, PGS, and VobSub cannot be converted because the text is stored as images that need an OCR model. Binary input is rejected with a clear message instead of being uploaded somewhere else.',
+	},
+];
+
+const relatedTools = [
+	{
+		href: '/',
+		label: 'Whisper JSON to SRT',
+		detail: 'Convert OpenAI Whisper, WhisperX, and whisper.cpp JSON transcripts into timed subtitles.',
+	},
+	{
+		href: '/smi-to-srt/',
+		label: 'SAMI (.smi) to SRT and VTT',
+		detail: 'Turn SAMI SYNC blocks and Korean or CJK caption files into clean cue text.',
+	},
+	{
+		href: '/merge-subtitles/',
+		label: 'Merge subtitle files',
+		detail: 'Combine two subtitle tracks into one timeline with duplicate and overlap checks.',
+	},
+	{
+		href: '/fix-subtitle-encoding/',
+		label: 'Fix subtitle encoding',
+		detail: 'Repair mojibake from CP949, Shift_JIS, GB18030, and Windows-1252 caption files.',
+	},
+	{
+		href: '/srt-to-json/',
+		label: 'SRT to JSON',
+		detail: 'Convert SRT or WebVTT cues into structured JSON for apps, tests, and pipelines.',
+	},
+	{
+		href: '/broadcast-subtitle-qc-standards/',
+		label: 'Broadcast subtitle QC standards',
+		detail: 'Check line width, reading speed, cue duration, and gaps against delivery rules.',
+	},
+];
+
+const ttmlInputSample = `<tt xmlns="http://www.w3.org/ns/ttml"
+    xmlns:ttp="http://www.w3.org/ns/ttml#parameter"
+    ttp:frameRate="25" ttp:tickRate="10000">
+  <body>
+    <div>
+      <p begin="00:00:01.200" end="00:00:03.900">Ferry horn sounds
+        across the harbor.</p>
+      <p begin="00:00:04:05" dur="25000t">Deckhands coil the
+        wet ropes.</p>
+    </div>
+  </body>
+</tt>`;
+
+const ttmlOutputSample = `1
+00:00:01,200 --> 00:00:03,900
+Ferry horn sounds across the harbor.
+
+2
+00:00:04,200 --> 00:00:06,700
+Deckhands coil the wet ropes.`;
+---
+
+<BaseLayout
+	title="TTML / DFXP to SRT & VTT Converter | Browser-Local Subtitle Tool"
+	description="Convert TTML, DFXP, SAMI, SBV, LRC, and ASS subtitle text into SRT or VTT files inside your browser. Frame rate, tick rate, and millisecond offsets are resolved locally with zero upload."
+	canonicalPath="/ttml-to-srt/"
+	faqs={faqs}
+>
+	<div class="space-y-8 min-w-0">
+		<section
+			aria-labelledby="ttml-hero-heading"
+			class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0"
+		>
+			<div class="lg:col-span-7 space-y-3 min-w-0">
+				<div
+					class="inline-flex flex-wrap items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-medium text-sky-900"
+				>
+					<span>Zero server upload</span>
+					<span class="text-sky-400">/</span>
+					<span>No file size cap</span>
+					<span class="text-sky-400">/</span>
+					<span>Timeline QC on every export</span>
+				</div>
+				<h1
+					id="ttml-hero-heading"
+					class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950 break-words"
+				>
+					TTML / DFXP to SRT &amp; VTT Converter (Plus SBV, LRC &amp; ASS)
+				</h1>
+				<p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl break-words">
+					Paste or drop a TTML or DFXP caption file and get a clean SubRip or WebVTT track in
+					the same tab. The workbench resolves clock, frame, and tick timestamps, strips styling
+					markup, and reflows every cue to your line width before export.
+				</p>
+				<p class="text-sm text-slate-600 leading-relaxed break-words">
+					The same input box also accepts SAMI, SBV, LRC, ASS, SSA, SRT, and WebVTT text, so a
+					mixed caption folder can be converted without switching pages.
+				</p>
+			</div>
+
+			<aside
+				aria-label="Quick technical specification"
+				class="lg:col-span-5 w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3"
+			>
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+					<h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+						Technical summary
+					</h2>
+					<span class="font-mono text-xs text-slate-500">/ttml-to-srt/</span>
+				</div>
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Accepted text inputs</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							TTML, DFXP, SAMI, SBV, LRC, ASS, SSA, SRT, WebVTT
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Output formats</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							SubRip (.srt) and WebVTT (.vtt)
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Timing units</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							Clock time, frames at ttp:frameRate, ticks at ttp:tickRate
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Line control</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							8 to 84 chars per line, 1 or 2 lines per cue, millisecond offset
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Execution and privacy</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							File.text() in local tab memory, no upload, no file size cap
+						</dd>
+					</div>
+					<div class="min-w-0">
+						<dt class="font-semibold text-slate-900">Quality gates</dt>
+						<dd class="text-slate-600 mt-0.5 break-words">
+							Timeline QC summary, issue list, and .qc.txt report
+						</dd>
+					</div>
+				</dl>
+			</aside>
+		</section>
+
+		<RareFormatWorkbench defaultSample="ttml" />
+
+		<section
+			aria-labelledby="ttml-timing-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					TTML and DFXP timing
+				</p>
+				<h2 id="ttml-timing-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					How TTML and DFXP timestamps become SRT cues
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				Each <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded break-all">&lt;p begin="..." end="..." dur="..."&gt;</code>
+				element becomes one cue. The parser reads <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">begin</code>
+				as the cue start, then prefers <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">end</code>
+				and adds <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">dur</code> to the start when
+				the end attribute is absent. A p element with no readable begin time is skipped and counted in the
+				status banner instead of producing a broken timestamp.
+			</p>
+			<ul class="space-y-2 text-sm text-slate-700 leading-relaxed list-disc pl-5 break-words">
+				<li>
+					<strong>Clock values:</strong> <code class="font-mono text-xs">00:00:01.200</code> and
+					<code class="font-mono text-xs">00:00:01,200</code> both map to 1200 milliseconds. Short
+					<code class="font-mono text-xs">mm:ss.xx</code> values are accepted too.
+				</li>
+				<li>
+					<strong>Frame values:</strong> <code class="font-mono text-xs">00:00:04:05</code> at
+					<code class="font-mono text-xs">ttp:frameRate="25"</code> becomes 4.2 seconds. The frame count
+					divides by the declared rate, with 30 fps as the fallback.
+				</li>
+				<li>
+					<strong>Offset values:</strong> <code class="font-mono text-xs">2.5s</code>,
+					<code class="font-mono text-xs">120ms</code>, and <code class="font-mono text-xs">42t</code>
+					are supported. Ticks divide by <code class="font-mono text-xs">ttp:tickRate</code>, defaulting
+					to 10000000.
+				</li>
+				<li>
+					<strong>Inline markup:</strong> br tags become line breaks, styling spans are removed, and
+					entities are decoded before the cue is wrapped to your characters per line limit.
+				</li>
+			</ul>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+				<div class="space-y-2 min-w-0">
+					<p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+						TTML input with frame and tick timing
+					</p>
+					<pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{ttmlInputSample}</code></pre>
+				</div>
+				<div class="space-y-2 min-w-0">
+					<p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+						SRT output after the same conversion
+					</p>
+					<pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-900"><code>{ttmlOutputSample}</code></pre>
+				</div>
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="ttml-other-formats-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-4 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					One workbench, several text tracks
+				</p>
+				<h2 id="ttml-other-formats-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Also supports SBV, LRC, and ASS/SSA text tracks
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				Caption folders rarely hold one format. The sample strip and the input format selector cover the
+				common text tracks that appear next to TTML deliverables:
+			</p>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">YouTube SBV</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
+						Comma separated <code class="font-mono text-xs">h:mm:ss.mmm,h:mm:ss.mmm</code> headers
+						become start and end times, and each blank line separated block becomes one cue.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">Synced LRC</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
+						<code class="font-mono text-xs">[mm:ss.xx]</code> stamps start a lyric line, multiple
+						stamps on one line repeat it, and each cue ends at the next stamp. A file level
+						<code class="font-mono text-xs">[offset:]</code> tag is applied before your own offset.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">ASS and SSA</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
+						Dialogue events read the Start and End columns, hard breaks become line breaks, and
+						override tags such as color and position are stripped so the cue text stays clean.
+					</p>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5 min-w-0">
+					<h3 class="text-sm font-bold text-slate-950">SRT and WebVTT</h3>
+					<p class="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
+						Existing SubRip and WebVTT tracks can be reflowed, retimed with an offset, and exported
+						to the other format without any external tool.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="ttml-scope-heading"
+			class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 sm:p-7 shadow-xs space-y-3 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-amber-800">
+					Scope note
+				</p>
+				<h2 id="ttml-scope-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Text based XML and caption formats only, no bitmap OCR
+				</h2>
+			</div>
+			<p class="text-sm text-slate-700 leading-relaxed break-words">
+				TTML, DFXP, SAMI, SBV, LRC, ASS, SRT, and WebVTT store caption text as characters, so the
+				converter can rebuild the timeline exactly. Bitmap subtitle formats such as SUP, PGS, and VobSub
+				store rendered images, and turning those into text requires an optical character recognition
+				model. This page does not ship an OCR model and does not upload the file to a service that has
+				one. Binary input is rejected with an explicit message so you know why nothing was converted.
+			</p>
+		</section>
+
+		<section
+			aria-labelledby="ttml-related-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5 min-w-0"
+		>
+			<div class="space-y-1">
+				<p class="text-xs font-mono font-semibold uppercase tracking-wider text-sky-700">
+					Related tools
+				</p>
+				<h2 id="ttml-related-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+					Keep working with the same local engine
+				</h2>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0">
+				{
+					relatedTools.map((tool) => (
+						<a
+							href={tool.href}
+							class="group rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-1.5 transition-colors hover:border-sky-400 hover:bg-slate-50/70 min-w-0"
+						>
+							<h3 class="text-sm font-bold text-slate-950 group-hover:text-sky-700 transition-colors break-words">
+								{tool.label}
+							</h3>
+							<p class="text-xs text-slate-600 leading-relaxed break-words">{tool.detail}</p>
+							<span class="mt-1 text-xs font-semibold text-sky-700">Open tool -&gt;</span>
+						</a>
+					))
+				}
+			</div>
+		</section>
+
+		<section
+			aria-labelledby="ttml-faq-heading"
+			class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs space-y-5 min-w-0"
+		>
+			<h2 id="ttml-faq-heading" class="text-lg sm:text-xl font-bold text-slate-950">
+				TTML to SRT questions
+			</h2>
+			<dl class="divide-y divide-slate-100">
+				{
+					faqs.map((item) => (
+						<div class="py-4 first:pt-0 last:pb-0 space-y-1.5 min-w-0">
+							<dt class="text-sm sm:text-base font-semibold text-slate-900 break-words">
+								{item.question}
+							</dt>
+							<dd class="text-sm text-slate-600 leading-relaxed break-words">{item.answer}</dd>
+						</div>
+					))
+				}
+			</dl>
+		</section>
+	</div>
+</BaseLayout>

@@ -1,0 +1,857 @@
+---
+import {
+	convertSubtitleText,
+	SAMPLE_RARE_SUBTITLES,
+	type SubtitleInputFormat,
+} from '../lib/subtitle-parsers';
+import type { TimelineQcReport } from '../lib/timeline-qc';
+
+interface Props {
+	defaultSample: 'ttml' | 'smi';
+}
+
+type RareSampleId = keyof typeof SAMPLE_RARE_SUBTITLES;
+type ConvertOutputFormat = 'srt' | 'vtt';
+
+const { defaultSample } = Astro.props;
+
+const RARE_SAMPLE_ORDER: RareSampleId[] = ['ttml', 'smi', 'sbv', 'lrc', 'ass'];
+
+const RARE_SAMPLE_DETAIL: Record<RareSampleId, string> = {
+	ttml: 'XML captions with begin, end, and dur timing',
+	smi: 'SAMI SYNC blocks with end markers',
+	sbv: 'YouTube SBV comma timing blocks',
+	lrc: 'Synced LRC lyric lines',
+	ass: 'ASS and SSA dialogue events',
+};
+
+const INPUT_FORMAT_OPTIONS: Array<{ id: SubtitleInputFormat | 'auto'; label: string }> = [
+	{ id: 'auto', label: 'Auto-detect' },
+	{ id: 'ttml', label: 'TTML / DFXP' },
+	{ id: 'smi', label: 'SAMI (.smi)' },
+	{ id: 'sbv', label: 'YouTube SBV' },
+	{ id: 'lrc', label: 'LRC lyrics' },
+	{ id: 'ass', label: 'ASS / SSA' },
+	{ id: 'srt', label: 'SubRip SRT' },
+	{ id: 'vtt', label: 'WebVTT' },
+];
+
+const OUTPUT_FORMAT_OPTIONS: Array<{ id: ConvertOutputFormat; label: string }> = [
+	{ id: 'srt', label: 'SubRip SRT (.srt)' },
+	{ id: 'vtt', label: 'WebVTT (.vtt)' },
+];
+
+const STATUS_BASE_CLASS = 'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium border space-y-1 break-words';
+const STATUS_OK_CLASS = `${STATUS_BASE_CLASS} bg-emerald-50/80 border-emerald-200 text-emerald-950`;
+const STATUS_ERROR_CLASS = `${STATUS_BASE_CLASS} bg-rose-50 border-rose-200 text-rose-900`;
+const QC_BASE_CLASS = 'rounded-xl border p-3.5 space-y-2 min-w-0';
+const QC_TONE_CLASS: Record<TimelineQcReport['status'] | 'empty', string> = {
+	clean: `${QC_BASE_CLASS} bg-emerald-50/60 border-emerald-200 text-emerald-950`,
+	warning: `${QC_BASE_CLASS} bg-amber-50/70 border-amber-300 text-amber-950`,
+	error: `${QC_BASE_CLASS} bg-rose-50/70 border-rose-300 text-rose-950`,
+	empty: `${QC_BASE_CLASS} bg-slate-50 border-slate-200 text-slate-800`,
+};
+
+const initialSample = SAMPLE_RARE_SUBTITLES[defaultSample];
+const initialBaseName = initialSample.filename.replace(/\.[^.]+$/, '');
+const initialResult = convertSubtitleText(initialSample.content, {
+	format: 'srt',
+	maxCharsPerLine: 42,
+	maxLinesPerCue: 2,
+	offsetMs: 0,
+	forceInputFormat: defaultSample,
+	filename: initialSample.filename,
+});
+
+const initialOutput = initialResult.ok ? initialResult.output : '';
+const initialQc: TimelineQcReport | null = initialResult.qc ?? null;
+const initialIssues = initialQc ? initialQc.issues.slice(0, 8) : [];
+const initialCueCount = initialResult.ok ? initialResult.cues.length : 0;
+const initialCueWord = initialCueCount === 1 ? 'cue' : 'cues';
+const initialWarningCount = initialResult.ok ? initialResult.warnings.length : 0;
+const initialWarnings = initialResult.ok ? initialResult.warnings.slice(0, 3) : [];
+---
+
+<section
+	aria-label="Rare subtitle format converter workbench"
+	class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-w-0"
+	data-rare-workbench
+	data-default-sample={defaultSample}
+	data-base-name={initialBaseName}
+>
+	<div class="border-b border-slate-200 bg-slate-50/90 px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<span class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Rare text format samples
+			</span>
+			<span class="text-xs text-slate-500">
+				Each sample loads locally, with no upload and no size cap
+			</span>
+		</div>
+		<div
+			role="group"
+			aria-label="Rare subtitle format sample files"
+			class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2"
+		>
+			{
+				RARE_SAMPLE_ORDER.map((id) => {
+					const sample = SAMPLE_RARE_SUBTITLES[id];
+					const active = id === defaultSample;
+					return (
+						<button
+							type="button"
+							data-testid={`rare-sample-${id}`}
+							data-rare-sample={id}
+							data-format={sample.format}
+							data-active={active ? 'true' : 'false'}
+							aria-pressed={active ? 'true' : 'false'}
+							class="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors min-h-11 hover:border-sky-400 cursor-pointer"
+						>
+							<span class="block text-xs font-semibold text-slate-900 break-words">
+								{sample.label}
+							</span>
+							<span class="mt-0.5 block text-[11px] leading-snug text-slate-500 break-words">
+								{RARE_SAMPLE_DETAIL[id]}
+							</span>
+						</button>
+					);
+				})
+			}
+		</div>
+	</div>
+
+	<div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 min-w-0">
+		<div class="p-4 sm:p-6 space-y-3 min-w-0">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<label for="rare-input" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Subtitle text input
+				</label>
+				<span class="text-xs text-slate-500 font-mono">Auto-converts on edit or drop</span>
+			</div>
+
+			<label
+				data-dropzone
+				data-rare-dropzone
+				class="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/70 px-4 py-5 text-center cursor-pointer"
+			>
+				<span class="text-sm font-semibold text-slate-800">Drop a subtitle file or browse</span>
+				<span class="text-[11px] leading-relaxed text-slate-500 break-words">
+					.ttml .dfxp .xml .smi .sami .sbv .lrc .ass .ssa .srt .vtt
+				</span>
+				<span class="text-[11px] text-slate-500">
+					File.text() reads the bytes in this tab only
+				</span>
+				<input
+					type="file"
+					data-testid="rare-file-upload"
+					accept=".ttml,.xml,.dfxp,.smi,.sami,.sbv,.lrc,.ass,.ssa,.srt,.vtt,text/plain"
+					class="sr-only"
+				/>
+			</label>
+
+			<p data-rare-drop-state class="text-xs text-slate-500 break-words">
+				No local file loaded. The preloaded sample stays active until you drop a file.
+			</p>
+
+			<textarea
+				id="rare-input"
+				data-testid="rare-input"
+				rows="12"
+				spellcheck="false"
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="off"
+				placeholder="Paste TTML, DFXP, SAMI, SBV, LRC, ASS, SRT, or WebVTT subtitle text here..."
+				class="w-full rounded-xl border border-slate-300 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+			>{initialSample.content}</textarea>
+		</div>
+
+		<div class="p-4 sm:p-6 bg-slate-50/40 space-y-4 min-w-0">
+			<div class="space-y-1.5">
+				<label for="rare-input-format" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Input format
+				</label>
+				<select
+					id="rare-input-format"
+					data-testid="rare-input-format"
+					class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none"
+				>
+					{
+						INPUT_FORMAT_OPTIONS.map((option) => (
+							<option value={option.id} selected={option.id === defaultSample}>
+								{option.label}
+							</option>
+						))
+					}
+				</select>
+			</div>
+
+			<div class="space-y-1.5">
+				<label for="rare-output-format" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Output format
+				</label>
+				<select
+					id="rare-output-format"
+					data-testid="rare-output-format"
+					class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none"
+				>
+					{
+						OUTPUT_FORMAT_OPTIONS.map((option) => (
+							<option value={option.id}>{option.label}</option>
+						))
+					}
+				</select>
+			</div>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<div class="space-y-1.5">
+					<label for="rare-max-chars" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+						Max chars per line
+					</label>
+					<input
+						id="rare-max-chars"
+						data-testid="rare-max-chars"
+						type="number"
+						inputmode="numeric"
+						min="8"
+						max="84"
+						step="1"
+						value="42"
+						class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 tabular-nums focus:border-sky-500 focus:outline-none"
+					/>
+				</div>
+				<div class="space-y-1.5">
+					<label for="rare-max-lines" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+						Max lines per cue
+					</label>
+					<select
+						id="rare-max-lines"
+						data-testid="rare-max-lines"
+						class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none"
+					>
+						<option value="1">1 line</option>
+						<option value="2" selected>2 lines</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="space-y-1.5">
+				<label for="rare-offset-ms" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+					Timestamp offset (ms)
+				</label>
+				<input
+					id="rare-offset-ms"
+					data-testid="rare-offset-ms"
+					type="number"
+					inputmode="numeric"
+					step="50"
+					value="0"
+					class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 tabular-nums focus:border-sky-500 focus:outline-none"
+				/>
+				<p class="text-[11px] text-slate-500">
+					Negative values shift cues earlier and clamp at 00:00:00,000.
+				</p>
+			</div>
+		</div>
+	</div>
+
+	<div class="border-t border-slate-200 px-4 sm:px-6 py-4 space-y-3 min-w-0">
+		<div
+			data-testid="rare-status"
+			data-status={initialResult.ok ? 'ok' : 'error'}
+			data-detected-format={initialResult.ok ? initialResult.inputFormat : 'unknown'}
+			data-cue-count={String(initialCueCount)}
+			role="status"
+			aria-live="polite"
+			class={initialResult.ok ? STATUS_OK_CLASS : STATUS_ERROR_CLASS}
+		>
+			{
+				initialResult.ok ? (
+					<>
+						<span class="block">
+							Detected: <strong>{initialResult.inputFormatLabel}</strong> | {initialCueCount}{' '}
+							{initialCueWord} | Warnings: {initialWarningCount}
+						</span>
+						{initialWarnings.length > 0 && (
+							<span class="block text-[11px] font-normal opacity-90">
+								{initialWarnings.join(' ')}
+							</span>
+						)}
+					</>
+				) : (
+					<span class="block">Conversion error: {initialResult.error}</span>
+				)
+			}
+		</div>
+
+		<div
+			data-testid="rare-qc-summary"
+			data-qc-state={initialQc ? initialQc.status : 'empty'}
+			data-qc-errors={String(initialQc?.errorCount ?? 0)}
+			data-qc-warnings={String(initialQc?.warningCount ?? 0)}
+			data-qc-omitted-segments={String(initialQc?.omittedSegments ?? 0)}
+			data-qc-omitted-cues={String(initialQc?.omittedCues ?? 0)}
+			aria-label="Timeline QC summary"
+			class={initialQc ? QC_TONE_CLASS[initialQc.status] : QC_TONE_CLASS.empty}
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="text-xs font-semibold uppercase tracking-wider">Timeline QC</span>
+				<span data-rare-qc-text class="text-xs font-medium break-words">
+					{initialQc ? initialQc.summary : 'Timeline QC did not run for this input.'}
+				</span>
+			</div>
+			<ul
+				data-testid="rare-qc-issues"
+				class="space-y-1 text-xs leading-relaxed list-disc pl-5 break-words"
+			>
+				{
+					initialIssues.length === 0 ? (
+						<li data-qc-code="clean" class="list-none pl-0 text-emerald-900">
+							{initialQc
+								? 'No timeline QC issues detected.'
+								: 'No timeline QC data for this input.'}
+						</li>
+					) : (
+						initialIssues.map((issue) => (
+							<li
+								data-qc-code={issue.code}
+								data-qc-scope={issue.scope}
+								data-qc-index={String(issue.index)}
+							>
+								[{issue.code}] {issue.message}
+							</li>
+						))
+					)
+				}
+			</ul>
+			<div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+				<p data-rare-qc-more class="text-[11px] opacity-80 break-words">
+					{initialQc && initialQc.issues.length > initialIssues.length
+						? `Showing ${initialIssues.length} of ${initialQc.issues.length} issues. Download the QC report for the full list.`
+						: 'Timing issues are reported, never silently repaired.'}
+				</p>
+				<button
+					type="button"
+					data-testid="rare-qc-download-btn"
+					disabled={!initialQc}
+					class="min-h-11 sm:min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Download QC report
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="border-t border-slate-200 p-4 sm:p-6 space-y-3 bg-slate-50/40 min-w-0">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<label for="rare-output" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+				Converted subtitle output
+			</label>
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					data-testid="rare-copy-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Copy output
+				</button>
+				<button
+					type="button"
+					data-testid="rare-download-btn"
+					class="min-h-11 sm:min-h-10 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors cursor-pointer disabled:opacity-50"
+				>
+					Download .srt
+				</button>
+			</div>
+		</div>
+		<p
+			data-testid="rare-export-status"
+			data-export-risk="false"
+			role="status"
+			aria-live="polite"
+			class="hidden rounded-lg px-3 py-2 text-xs font-medium"
+		></p>
+		<textarea
+			id="rare-output"
+			data-testid="rare-output"
+			rows="14"
+			readonly
+			spellcheck="false"
+			autocomplete="off"
+			class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 font-mono text-xs leading-relaxed p-3.5 focus:border-sky-500 focus:outline-none resize-y"
+		>{initialOutput}</textarea>
+	</div>
+</section>
+
+<style>
+	[data-rare-sample][data-active='true'] {
+		background-color: #0f172a;
+		border-color: #0f172a;
+	}
+
+	[data-rare-sample][data-active='true'] span:first-child {
+		color: #ffffff;
+	}
+
+	[data-rare-sample][data-active='true'] span:last-child {
+		color: #bae6fd;
+	}
+</style>
+
+<script>
+	import {
+		convertSubtitleText,
+		SAMPLE_RARE_SUBTITLES,
+		type SubtitleInputFormat,
+	} from '../lib/subtitle-parsers';
+	import { formatQcReport, type TimelineQcReport } from '../lib/timeline-qc';
+	import { trackToolEvent } from '../lib/analytics';
+
+	type RareSampleId = keyof typeof SAMPLE_RARE_SUBTITLES;
+	type ConvertOutputFormat = 'srt' | 'vtt';
+
+	const STATUS_BASE_CLASS =
+		'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium border space-y-1 break-words';
+	const STATUS_OK_CLASS = `${STATUS_BASE_CLASS} bg-emerald-50/80 border-emerald-200 text-emerald-950`;
+	const STATUS_ERROR_CLASS = `${STATUS_BASE_CLASS} bg-rose-50 border-rose-200 text-rose-900`;
+	const QC_BASE_CLASS = 'rounded-xl border p-3.5 space-y-2 min-w-0';
+	const QC_TONE_CLASS: Record<TimelineQcReport['status'] | 'empty', string> = {
+		clean: `${QC_BASE_CLASS} bg-emerald-50/60 border-emerald-200 text-emerald-950`,
+		warning: `${QC_BASE_CLASS} bg-amber-50/70 border-amber-300 text-amber-950`,
+		error: `${QC_BASE_CLASS} bg-rose-50/70 border-rose-300 text-rose-950`,
+		empty: `${QC_BASE_CLASS} bg-slate-50 border-slate-200 text-slate-800`,
+	};
+	const EXPORT_HIDDEN_CLASS = 'hidden rounded-lg px-3 py-2 text-xs font-medium';
+	const EXPORT_OK_CLASS =
+		'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950 break-words';
+	const EXPORT_WARN_CLASS =
+		'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 break-words';
+	const MIME_BY_FORMAT: Record<ConvertOutputFormat, string> = {
+		srt: 'application/x-subrip;charset=utf-8',
+		vtt: 'text/vtt;charset=utf-8',
+	};
+
+	function formatByteSize(bytes: number): string {
+		if (bytes >= 1_000_000) {
+			return `${(bytes / 1_000_000).toFixed(2)} MB`;
+		}
+		if (bytes >= 1_000) {
+			return `${(bytes / 1_000).toFixed(1)} KB`;
+		}
+		return `${bytes} B`;
+	}
+
+	function bindRareWorkbench(root: HTMLElement): void {
+		const input = root.querySelector<HTMLTextAreaElement>('[data-testid="rare-input"]');
+		const fileUpload = root.querySelector<HTMLInputElement>('[data-testid="rare-file-upload"]');
+		const dropzone = root.querySelector<HTMLElement>('[data-rare-dropzone]');
+		const dropState = root.querySelector<HTMLElement>('[data-rare-drop-state]');
+		const sampleButtons = Array.from(
+			root.querySelectorAll<HTMLButtonElement>('[data-rare-sample]'),
+		);
+		const inputFormatSelect = root.querySelector<HTMLSelectElement>(
+			'[data-testid="rare-input-format"]',
+		);
+		const outputFormatSelect = root.querySelector<HTMLSelectElement>(
+			'[data-testid="rare-output-format"]',
+		);
+		const maxCharsInput = root.querySelector<HTMLInputElement>('[data-testid="rare-max-chars"]');
+		const maxLinesSelect = root.querySelector<HTMLSelectElement>('[data-testid="rare-max-lines"]');
+		const offsetMsInput = root.querySelector<HTMLInputElement>('[data-testid="rare-offset-ms"]');
+		const statusBanner = root.querySelector<HTMLElement>('[data-testid="rare-status"]');
+		const qcBox = root.querySelector<HTMLElement>('[data-testid="rare-qc-summary"]');
+		const qcText = root.querySelector<HTMLElement>('[data-rare-qc-text]');
+		const qcIssues = root.querySelector<HTMLElement>('[data-testid="rare-qc-issues"]');
+		const qcMore = root.querySelector<HTMLElement>('[data-rare-qc-more]');
+		const qcDownloadBtn = root.querySelector<HTMLButtonElement>(
+			'[data-testid="rare-qc-download-btn"]',
+		);
+		const outputArea = root.querySelector<HTMLTextAreaElement>('[data-testid="rare-output"]');
+		const copyBtn = root.querySelector<HTMLButtonElement>('[data-testid="rare-copy-btn"]');
+		const downloadBtn = root.querySelector<HTMLButtonElement>('[data-testid="rare-download-btn"]');
+		const exportStatus = root.querySelector<HTMLElement>('[data-testid="rare-export-status"]');
+
+		if (
+			!input ||
+			!fileUpload ||
+			!inputFormatSelect ||
+			!outputFormatSelect ||
+			!maxCharsInput ||
+			!maxLinesSelect ||
+			!offsetMsInput ||
+			!statusBanner ||
+			!outputArea ||
+			!copyBtn ||
+			!downloadBtn
+		) {
+			return;
+		}
+
+		let activeRawText = input.value;
+		let activeBaseName = root.dataset.baseName || 'rare-subtitles';
+		let fullOutputText = outputArea.value;
+		let activeQc: TimelineQcReport | null = null;
+		let activeCueCount = 0;
+		let activeFormat: ConvertOutputFormat =
+			outputFormatSelect.value === 'vtt' ? 'vtt' : 'srt';
+
+		const paintSampleButtons = (activeId: string): void => {
+			for (const button of sampleButtons) {
+				const isActive = button.dataset.rareSample === activeId;
+				button.dataset.active = isActive ? 'true' : 'false';
+				button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+			}
+		};
+
+		const setExportStatus = (message: string, tone: 'ok' | 'warn' | 'none'): void => {
+			if (!exportStatus) return;
+			exportStatus.textContent = message;
+			exportStatus.dataset.exportRisk = tone === 'warn' ? 'true' : 'false';
+			exportStatus.className =
+				tone === 'none' ? EXPORT_HIDDEN_CLASS : tone === 'warn' ? EXPORT_WARN_CLASS : EXPORT_OK_CLASS;
+		};
+
+		const readOptions = (): {
+			format: ConvertOutputFormat;
+			maxCharsPerLine: number;
+			maxLinesPerCue: 1 | 2;
+			offsetMs: number;
+			forceInputFormat: SubtitleInputFormat | 'auto';
+		} => {
+			const rawFormat = inputFormatSelect.value;
+			const forceInputFormat: SubtitleInputFormat | 'auto' =
+				rawFormat === 'auto' ? 'auto' : (rawFormat as SubtitleInputFormat);
+			const parsedChars = Number.parseInt(maxCharsInput.value, 10);
+			const maxCharsPerLine = Number.isFinite(parsedChars)
+				? Math.min(84, Math.max(8, parsedChars))
+				: 42;
+			const maxLinesPerCue: 1 | 2 = maxLinesSelect.value === '1' ? 1 : 2;
+			const parsedOffset = Number(offsetMsInput.value);
+			const offsetMs = Number.isFinite(parsedOffset) ? Math.round(parsedOffset) : 0;
+			const format: ConvertOutputFormat = outputFormatSelect.value === 'vtt' ? 'vtt' : 'srt';
+			return { format, maxCharsPerLine, maxLinesPerCue, offsetMs, forceInputFormat };
+		};
+
+		const renderQc = (report: TimelineQcReport | null): void => {
+			activeQc = report;
+			const state: TimelineQcReport['status'] | 'empty' = report ? report.status : 'empty';
+			if (qcBox) {
+				qcBox.dataset.qcState = state;
+				qcBox.dataset.qcErrors = String(report?.errorCount ?? 0);
+				qcBox.dataset.qcWarnings = String(report?.warningCount ?? 0);
+				qcBox.dataset.qcOmittedSegments = String(report?.omittedSegments ?? 0);
+				qcBox.dataset.qcOmittedCues = String(report?.omittedCues ?? 0);
+				qcBox.className = QC_TONE_CLASS[state];
+			}
+			if (qcText) {
+				qcText.textContent = report
+					? report.summary
+					: 'Timeline QC did not run for this input.';
+			}
+			if (qcIssues) {
+				const fragment = document.createDocumentFragment();
+				if (!report) {
+					const emptyItem = document.createElement('li');
+					emptyItem.dataset.qcCode = 'empty';
+					emptyItem.className = 'list-none pl-0';
+					emptyItem.textContent = 'No timeline QC data for this input.';
+					fragment.appendChild(emptyItem);
+				} else if (report.issues.length === 0) {
+					const cleanItem = document.createElement('li');
+					cleanItem.dataset.qcCode = 'clean';
+					cleanItem.className = 'list-none pl-0 text-emerald-900';
+					cleanItem.textContent = 'No timeline QC issues detected.';
+					fragment.appendChild(cleanItem);
+				} else {
+					for (const issue of report.issues.slice(0, 8)) {
+						const item = document.createElement('li');
+						item.dataset.qcCode = issue.code;
+						item.dataset.qcScope = issue.scope;
+						item.dataset.qcIndex = String(issue.index);
+						item.textContent = `[${issue.code}] ${issue.message}`;
+						fragment.appendChild(item);
+					}
+				}
+				qcIssues.replaceChildren(fragment);
+			}
+			if (qcMore) {
+				qcMore.textContent =
+					report && report.issues.length > 8
+						? `Showing 8 of ${report.issues.length} issues. Download the QC report for the full list.`
+						: 'Timing issues are reported, never silently repaired.';
+			}
+			if (qcDownloadBtn) {
+				qcDownloadBtn.disabled = !report;
+			}
+		};
+
+		const runConversion = (): void => {
+			const options = readOptions();
+			activeFormat = options.format;
+			downloadBtn.textContent = `Download .${options.format}`;
+
+			const result = convertSubtitleText(activeRawText, {
+				format: options.format,
+				maxCharsPerLine: options.maxCharsPerLine,
+				maxLinesPerCue: options.maxLinesPerCue,
+				offsetMs: options.offsetMs,
+				forceInputFormat: options.forceInputFormat,
+			});
+
+			if (result.ok) {
+				activeCueCount = result.cues.length;
+				statusBanner.dataset.status = 'ok';
+				statusBanner.dataset.detectedFormat = result.inputFormat;
+				statusBanner.dataset.cueCount = String(result.cues.length);
+				statusBanner.className = STATUS_OK_CLASS;
+
+				const summary = document.createElement('span');
+				summary.className = 'block';
+				const label = document.createElement('strong');
+				label.textContent = result.inputFormatLabel;
+				const cueWord = result.cues.length === 1 ? 'cue' : 'cues';
+				summary.append(
+					document.createTextNode('Detected: '),
+					label,
+					document.createTextNode(
+						` | ${result.cues.length} ${cueWord} | Warnings: ${result.warnings.length}`,
+					),
+				);
+				statusBanner.replaceChildren(summary);
+
+				if (result.warnings.length > 0) {
+					const warningLine = document.createElement('span');
+					warningLine.className = 'block text-[11px] font-normal opacity-90';
+					warningLine.textContent = result.warnings.slice(0, 3).join(' ');
+					statusBanner.appendChild(warningLine);
+				}
+
+				fullOutputText = result.output;
+				outputArea.value = fullOutputText;
+				copyBtn.disabled = fullOutputText.length === 0;
+				downloadBtn.disabled = fullOutputText.length === 0;
+				renderQc(result.qc);
+			} else {
+				activeCueCount = 0;
+				statusBanner.dataset.status = 'error';
+				statusBanner.dataset.detectedFormat = 'unknown';
+				statusBanner.dataset.cueCount = '0';
+				statusBanner.className = STATUS_ERROR_CLASS;
+				const errorLine = document.createElement('span');
+				errorLine.className = 'block';
+				errorLine.textContent = `Conversion error: ${result.error}`;
+				statusBanner.replaceChildren(errorLine);
+
+				fullOutputText = '';
+				outputArea.value = '';
+				copyBtn.disabled = true;
+				downloadBtn.disabled = true;
+				renderQc(result.qc ?? null);
+			}
+
+			setExportStatus('', 'none');
+		};
+
+		const announceExport = (
+			action: 'copy' | 'download' | 'qc_report',
+			format: string,
+		): void => {
+			if (!activeQc) return;
+			if (action === 'qc_report') {
+				setExportStatus(
+					`Downloaded the QC report with ${activeQc.issues.length} issue(s) for ${activeCueCount} cues.`,
+					activeQc.status === 'clean' ? 'ok' : 'warn',
+				);
+				return;
+			}
+			if (activeQc.status === 'clean') {
+				setExportStatus(
+					`${action === 'copy' ? 'Copied' : 'Downloaded'} ${activeCueCount} cues as .${format}.`,
+					'ok',
+				);
+				return;
+			}
+			setExportStatus(
+				`Exported .${format} with timeline QC ${activeQc.status}: ${activeQc.errorCount} error(s) and ${activeQc.warningCount} warning(s). Review the Timeline QC panel.`,
+				'warn',
+			);
+		};
+
+		const loadSample = (id: RareSampleId): void => {
+			const sample = SAMPLE_RARE_SUBTITLES[id];
+			activeRawText = sample.content;
+			activeBaseName = sample.filename.replace(/\.[^.]+$/, '') || 'rare-subtitles';
+			input.value = sample.content;
+			inputFormatSelect.value = sample.format;
+			paintSampleButtons(id);
+			if (dropState) {
+				dropState.textContent = `Sample loaded locally: ${sample.label}.`;
+			}
+			runConversion();
+		};
+
+		const ingestFile = async (file: File): Promise<void> => {
+			const text = await file.text();
+			const bytes = file.size > 0 ? file.size : new TextEncoder().encode(text).byteLength;
+			activeRawText = text;
+			activeBaseName = file.name.replace(/\.[^.]+$/, '') || 'rare-subtitles';
+			input.value = text;
+			inputFormatSelect.value = 'auto';
+			paintSampleButtons('');
+			if (dropState) {
+				dropState.textContent = `Loaded ${file.name} (${formatByteSize(bytes)}) locally. No upload.`;
+			}
+			runConversion();
+		};
+
+		for (const button of sampleButtons) {
+			button.addEventListener('click', () => {
+				const id = button.dataset.rareSample as RareSampleId | undefined;
+				if (id && id in SAMPLE_RARE_SUBTITLES) {
+					loadSample(id);
+				}
+			});
+		}
+
+		if (dropzone) {
+			dropzone.addEventListener('dragenter', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = 'copy';
+				}
+				dropzone.dataset.dragActive = 'true';
+			});
+
+			dropzone.addEventListener('dragleave', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				const related = event.relatedTarget as Node | null;
+				if (!related || !dropzone.contains(related)) {
+					dropzone.dataset.dragActive = 'false';
+				}
+			});
+
+			dropzone.addEventListener('drop', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				dropzone.dataset.dragActive = 'false';
+				const file = event.dataTransfer?.files?.[0];
+				if (file) {
+					void ingestFile(file);
+				}
+			});
+		}
+
+		input.addEventListener('dragover', (event) => {
+			if (event.dataTransfer?.types.includes('Files')) {
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		});
+
+		input.addEventListener('drop', (event) => {
+			const file = event.dataTransfer?.files?.[0];
+			if (file) {
+				event.preventDefault();
+				void ingestFile(file);
+			}
+		});
+
+		input.addEventListener('input', () => {
+			activeRawText = input.value;
+			runConversion();
+		});
+
+		fileUpload.addEventListener('change', () => {
+			const file = fileUpload.files?.[0];
+			if (!file) return;
+			void ingestFile(file);
+		});
+
+		inputFormatSelect.addEventListener('change', runConversion);
+		outputFormatSelect.addEventListener('change', runConversion);
+		maxCharsInput.addEventListener('input', runConversion);
+		maxCharsInput.addEventListener('blur', () => {
+			const parsed = Number.parseInt(maxCharsInput.value, 10);
+			const clamped = Number.isFinite(parsed) ? Math.min(84, Math.max(8, parsed)) : 42;
+			maxCharsInput.value = String(clamped);
+			runConversion();
+		});
+		maxLinesSelect.addEventListener('change', runConversion);
+		offsetMsInput.addEventListener('input', runConversion);
+
+		copyBtn.addEventListener('click', async () => {
+			if (!fullOutputText) return;
+			try {
+				await navigator.clipboard.writeText(fullOutputText);
+			} catch {
+				outputArea.select();
+				document.execCommand('copy');
+			}
+			trackToolEvent('subtitle_export', {
+				export_action: 'copy',
+				output_format: activeFormat,
+			});
+			announceExport('copy', activeFormat);
+			const originalLabel = copyBtn.textContent;
+			copyBtn.textContent = 'Copied';
+			window.setTimeout(() => {
+				copyBtn.textContent = originalLabel;
+			}, 1400);
+		});
+
+		downloadBtn.addEventListener('click', () => {
+			if (!fullOutputText) return;
+			const blob = new Blob([fullOutputText], { type: MIME_BY_FORMAT[activeFormat] });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = `${activeBaseName}.${activeFormat}`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', {
+				export_action: 'download',
+				output_format: activeFormat,
+			});
+			announceExport('download', activeFormat);
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		qcDownloadBtn?.addEventListener('click', () => {
+			if (!activeQc) return;
+			const reportText = formatQcReport(activeQc);
+			const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = objectUrl;
+			anchor.download = `${activeBaseName}.qc.txt`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			trackToolEvent('subtitle_export', {
+				export_action: 'qc_report',
+				output_format: 'txt',
+			});
+			announceExport('qc_report', 'txt');
+			window.setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 1000);
+		});
+
+		runConversion();
+	}
+
+	document
+		.querySelectorAll<HTMLElement>('[data-rare-workbench]')
+		.forEach((root) => bindRareWorkbench(root));
+</script>
