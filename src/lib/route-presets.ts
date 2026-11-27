@@ -135,9 +135,9 @@ print("Transcription saved. Drop transcript_raw.json into the converter above.")
 		path: '/whisper-verbose-json-to-srt/',
 		navLabel: 'verbose_json to SRT',
 		h1: 'Whisper verbose_json to SRT Converter',
-		seoTitle: 'Whisper verbose_json to SRT | OpenAI Audio API Subtitle Tool',
+		seoTitle: 'Convert Whisper verbose_json to SRT | Free, No Upload',
 		metaDescription:
-			'Turn OpenAI Audio API verbose_json responses with word or segment timestamps into 42-character SRT subtitles locally in your browser with no file cap.',
+			'Drop an OpenAI Whisper verbose_json file and download SRT in your browser. Uses word-level timestamps when present, never uploads, and has no file-size cap.',
 		primaryKeyword: 'whisper verbose_json to srt',
 		heroSummary:
 			'Built specifically for OpenAI /v1/audio/transcriptions payloads captured with response_format set to verbose_json. Uses word-level floating-point timestamps when available and falls back to proportional segment splitting when only segments[] is present.',
